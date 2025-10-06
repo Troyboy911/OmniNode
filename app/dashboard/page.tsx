@@ -10,6 +10,7 @@ import EconomicDashboard from '@/components/EconomicDashboard';
 import BlockchainIntegration from '@/components/BlockchainIntegration';
 import AgentSynthesizer from '@/components/AgentSynthesizer';
 import AscensionDashboard from '@/components/AscensionDashboard';
+import PanNetworkDashboard from '@/components/PanNetworkDashboard';
 import { mockAgents, mockSystemMetrics, mockProjects } from '@/lib/mockData';
 import { 
   Brain, 
@@ -21,10 +22,11 @@ import {
   Target,
   Menu,
   X,
-  Zap
+  Zap,
+  Network
 } from 'lucide-react';
 
-type TabType = 'overview' | 'agents' | 'strategic' | 'economic' | 'blockchain' | 'synthesizer' | 'ascension';
+type TabType = 'overview' | 'agents' | 'strategic' | 'economic' | 'blockchain' | 'synthesizer' | 'ascension' | 'pannetwork';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -33,6 +35,7 @@ export default function Dashboard() {
   const tabs = [
     { id: 'overview' as TabType, name: 'Overview', icon: LayoutDashboard },
     { id: 'ascension' as TabType, name: 'Ascension Protocol', icon: Zap },
+    { id: 'pannetwork' as TabType, name: 'Pan-Network', icon: Network },
     { id: 'agents' as TabType, name: 'Agent Fleet', icon: Users },
     { id: 'strategic' as TabType, name: 'Strategic Planning', icon: Target },
     { id: 'synthesizer' as TabType, name: 'Agent Synthesizer', icon: Sparkles },
@@ -116,6 +119,7 @@ export default function Dashboard() {
               <p className="text-gray-400">
                 {activeTab === 'overview' && 'Monitor your AI orchestration platform'}
                 {activeTab === 'ascension' && 'Self-optimizing intelligence with recursive learning'}
+                {activeTab === 'pannetwork' && 'Distributed intelligence network with federated learning'}
                 {activeTab === 'agents' && 'Manage your autonomous agent fleet'}
                 {activeTab === 'strategic' && 'Plan and execute strategic directives'}
                 {activeTab === 'synthesizer' && 'Create new specialized AI agents'}
@@ -148,6 +152,8 @@ export default function Dashboard() {
               )}
 
               {activeTab === 'ascension' && <AscensionDashboard />}
+
+              {activeTab === 'pannetwork' && <PanNetworkDashboard />}
 
               {activeTab === 'agents' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
