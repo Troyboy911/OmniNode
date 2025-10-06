@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link2, CheckCircle, Clock, AlertCircle, ExternalLink } from 'lucide-react';
 
 interface SmartContract {
@@ -13,10 +13,6 @@ interface SmartContract {
   gasUsed?: number;
   transactions: number;
 }
-
-'use client';
-
-import { useState, useEffect } from 'react';
 
 export default function BlockchainIntegration() {
   const [mounted, setMounted] = useState(false);
