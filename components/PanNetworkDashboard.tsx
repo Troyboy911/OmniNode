@@ -5,6 +5,12 @@ import { Network, Globe, Share2, Users, Database, Zap, Shield, TrendingUp } from
 import PanNetworkCognition from '@/lib/ascension/PanNetworkCognition';
 
 export default function PanNetworkDashboard() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [panNetwork] = useState(() => new PanNetworkCognition());
   const [networkStats, setNetworkStats] = useState<any>(null);
   const [connectedNodes, setConnectedNodes] = useState<any[]>([]);
@@ -363,8 +369,8 @@ export default function PanNetworkDashboard() {
                     </div>
                     <div>
                       <span className="text-gray-400">Deadline: </span>
-                      <span className="text-white">
-                        {new Date(request.deadline).toLocaleDateString()}
+                      <span className="text-white" suppressHydrationWarning>
+                        {mounted ? new Date(request.deadline).toLocaleDateString() : ''}
                       </span>
                     </div>
                   </div>

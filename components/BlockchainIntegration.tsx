@@ -14,7 +14,17 @@ interface SmartContract {
   transactions: number;
 }
 
+'use client';
+
+import { useState, useEffect } from 'react';
+
 export default function BlockchainIntegration() {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const [contracts] = useState<SmartContract[]>([
     {
       id: 'contract-1',
@@ -185,8 +195,8 @@ export default function BlockchainIntegration() {
                 <div className="grid grid-cols-3 gap-4 pt-3 border-t border-gray-700">
                   <div>
                     <p className="text-xs text-gray-400">Deployed</p>
-                    <p className="text-sm font-semibold text-white">
-                      {contract.deployedAt?.toLocaleDateString()}
+                    <p className="text-sm font-semibold text-white" suppressHydrationWarning>
+                      {mounted && contract.deployedAt ? contract.deployedAt.toLocaleDateString() : ''}
                     </p>
                   </div>
                   <div>

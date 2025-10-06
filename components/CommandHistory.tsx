@@ -7,7 +7,16 @@ interface CommandHistoryProps {
   commands: Command[];
 }
 
+'use client';
+
+import { useEffect, useState } from 'react';
+
 export default function CommandHistory({ commands }: CommandHistoryProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const getStatusIcon = (status: CommandStatus) => {
     switch (status) {
       case CommandStatus.COMPLETED:
@@ -58,8 +67,8 @@ export default function CommandHistory({ commands }: CommandHistoryProps) {
                   {command.status.replace('_', ' ')}
                 </span>
               </div>
-              <span className="text-xs text-gray-500">
-                {command.timestamp.toLocaleTimeString()}
+              <span className="text-xs text-gray-500" suppressHydrationWarning>
+                {mounted ? command.timestamp.toLocaleTimeString() : ''}
               </span>
             </div>
             <p className="text-sm text-white mb-2">{command.text}</p>

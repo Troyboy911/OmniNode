@@ -7,7 +7,17 @@ interface ProjectOverviewProps {
   project: Project;
 }
 
+'use client';
+
+import { useEffect, useState } from 'react';
+
 export default function ProjectOverview({ project }: ProjectOverviewProps) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   const getStatusColor = () => {
     switch (project.status) {
       case ProjectStatus.PLANNING:
@@ -131,12 +141,12 @@ export default function ProjectOverview({ project }: ProjectOverviewProps) {
                   <p className="text-xs text-gray-400">{milestone.description}</p>
                 </div>
               </div>
-              <span className="text-xs text-gray-400">
-                {new Date(milestone.targetDate).toLocaleDateString('en-US', {
+              <span className="text-xs text-gray-400" suppressHydrationWarning>
+                {mounted ? new Date(milestone.targetDate).toLocaleDateString('en-US', {
                   month: 'numeric',
                   day: 'numeric',
                   year: 'numeric'
-                })}
+                }) : ''}
               </span>
             </div>
           ))}

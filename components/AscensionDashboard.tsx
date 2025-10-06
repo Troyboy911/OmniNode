@@ -1,12 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+
+// Helper to safely format dates on client-side only
+const useMounted = () => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+  return mounted;
+};
 import { Brain, Zap, TrendingUp, Network, Eye, Sparkles } from 'lucide-react';
 import MetaLearningCore from '@/lib/ascension/MetaLearningCore';
 import OmniMind from '@/lib/ascension/OmniMind';
 import StrategicAutonomy from '@/lib/ascension/StrategicAutonomy';
 
 export default function AscensionDashboard() {
+  const mounted = useMounted();
   const [metaCore] = useState(() => new MetaLearningCore());
   const [omniMind] = useState(() => new OmniMind());
   const [strategicEngine] = useState(() => new StrategicAutonomy());
@@ -233,8 +243,8 @@ export default function AscensionDashboard() {
                       {evo.type}
                     </span>
                   </div>
-                  <span className="text-xs text-gray-400">
-                    {new Date(evo.timestamp).toLocaleTimeString()}
+                  <span className="text-xs text-gray-400" suppressHydrationWarning>
+                    {mounted ? new Date(evo.timestamp).toLocaleTimeString() : ''}
                   </span>
                 </div>
                 <p className="text-sm text-white mb-2">{evo.description}</p>
