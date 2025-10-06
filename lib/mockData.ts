@@ -149,14 +149,14 @@ export const mockProjects: Project[] = [
           id: 'milestone-001',
           name: 'Smart Contract Deployment',
           description: 'Deploy NFT minting and marketplace contracts',
-          targetDate: new Date('2025-03-15'),
+          targetDate: new Date('2025-03-15T00:00:00Z'),
           completed: true
         },
         {
           id: 'milestone-002',
           name: 'Frontend Launch',
           description: 'Launch beta version of gallery interface',
-          targetDate: new Date('2025-03-30'),
+          targetDate: new Date('2025-03-30T00:00:00Z'),
           completed: false
         }
       ]

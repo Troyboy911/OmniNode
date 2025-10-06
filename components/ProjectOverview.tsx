@@ -132,7 +132,11 @@ export default function ProjectOverview({ project }: ProjectOverviewProps) {
                 </div>
               </div>
               <span className="text-xs text-gray-400">
-                {milestone.targetDate.toLocaleDateString()}
+                {new Date(milestone.targetDate).toLocaleDateString('en-US', {
+                  month: 'numeric',
+                  day: 'numeric',
+                  year: 'numeric'
+                })}
               </span>
             </div>
           ))}
