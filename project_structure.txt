@@ -1,0 +1,35 @@
+.
+├── FEATURES.md
+├── README.md
+├── USAGE_GUIDE.md
+├── app
+│   ├── dashboard
+│   ├── globals.css
+│   ├── layout.tsx
+│   └── page.tsx
+├── components
+│   ├── AgentCard.tsx
+│   ├── AgentSynthesizer.tsx
+│   ├── BlockchainIntegration.tsx
+│   ├── CommandHistory.tsx
+│   ├── CommandInput.tsx
+│   ├── EconomicDashboard.tsx
+│   ├── NeuralBackground.tsx
+│   ├── ProjectOverview.tsx
+│   ├── StrategicPlanner.tsx
+│   └── SystemMetrics.tsx
+├── lib
+│   └── mockData.ts
+├── next-env.d.ts
+├── next.config.js
+├── package-lock.json
+├── package.json
+├── postcss.config.js
+├── project_structure.txt
+├── public
+├── tailwind.config.ts
+├── tsconfig.json
+└── types
+    └── index.ts
+
+7 directories, 26 files
