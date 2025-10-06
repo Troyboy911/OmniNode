@@ -1,15 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Command, CommandStatus } from '@/types';
 import { Terminal, CheckCircle, Clock, AlertCircle, Loader } from 'lucide-react';
 
 interface CommandHistoryProps {
   commands: Command[];
 }
-
-'use client';
-
-import { useEffect, useState } from 'react';
 
 export default function CommandHistory({ commands }: CommandHistoryProps) {
   const [mounted, setMounted] = useState(false);

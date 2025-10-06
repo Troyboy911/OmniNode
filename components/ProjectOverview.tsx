@@ -1,15 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { Project, ProjectStatus } from '@/types';
 import { Folder, Calendar, DollarSign, TrendingUp, CheckCircle2 } from 'lucide-react';
 
 interface ProjectOverviewProps {
   project: Project;
 }
-
-'use client';
-
-import { useEffect, useState } from 'react';
 
 export default function ProjectOverview({ project }: ProjectOverviewProps) {
   const [mounted, setMounted] = useState(false);
