@@ -1,7 +1,9 @@
+import http from 'http';
 import app from './app';
 import { config } from '@/config/env';
 import { logger } from '@/config/logger';
 import DatabaseService from '@/config/database';
+import { initializeWebSocket } from '@/services/websocket/websocket.service';
 
 const PORT = config.server.port;
 
@@ -12,13 +14,22 @@ const startServer = async () => {
     await DatabaseService.connect();
     logger.info('✅ Database connected successfully');
 
-    // Start Express server
-    app.listen(PORT, () => {
+    // Create HTTP server
+    const server = http.createServer(app);
+    
+    // Initialize WebSocket
+    initializeWebSocket(server);
+    
+    // Start server
+    server.listen(PORT, () => {
       logger.info(`🚀 Server running on port ${PORT}`);
-      logger.info(`📝 Environment: ${config.server.env}`);
+      logger.info(`📓 Environment: ${config.server.env}`);
       logger.info(`🔗 API URL: http://localhost:${PORT}/api/${config.server.apiVersion}`);
       logger.info(`💚 Health check: http://localhost:${PORT}/api/${config.server.apiVersion}/health`);
+      logger.info(`🔌 WebSocket ready on port ${PORT}`);
     });
+
+    return server;
   } catch (error) {
     logger.error('❌ Failed to start server:', error);
     process.exit(1);
