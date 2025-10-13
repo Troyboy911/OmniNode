@@ -11,24 +11,27 @@ datasource db {
 
 // User Model
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  username      String    @unique
-  password      String
-  firstName     String?
-  lastName      String?
-  role          UserRole  @default(USER)
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  lastLoginAt   DateTime?
-  
+  id          String    @id @default(uuid())
+  email       String    @unique
+  username    String    @unique
+  password    String
+  firstName   String?
+  lastName    String?
+  role        UserRole  @default(USER)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
   // Relations
-  agents        Agent[]
-  projects      Project[]
-  commands      Command[]
-  apiKeys       ApiKey[]
-  
+  agents          Agent[]
+  projects        Project[]
+  commands        Command[]
+  apiKeys         ApiKey[]
+  AIConversation  AIConversation[]
+  File            File[]
+  AIProcessingJob AIProcessingJob[]
+
   @@index([email])
   @@index([username])
 }
@@ -41,27 +44,29 @@ enum UserRole {
 
 // Agent Model
 model Agent {
-  id              String      @id @default(uuid())
-  name            String
-  role            String
-  description     String?
-  status          AgentStatus @default(IDLE)
-  capabilities    Json        // Array of capabilities
-  performance     Float       @default(0.0)
-  tasksCompleted  Int         @default(0)
-  successRate     Float       @default(0.0)
-  isActive        Boolean     @default(true)
-  config          Json?       // Agent configuration
-  memory          Json?       // Agent memory/context
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
+  id             String      @id @default(uuid())
+  name           String
+  role           String
+  description    String?
+  status         AgentStatus @default(IDLE)
+  capabilities   Json // Array of capabilities
+  performance    Float       @default(0.0)
+  tasksCompleted Int         @default(0)
+  successRate    Float       @default(0.0)
+  isActive       Boolean     @default(true)
+  config         Json? // Agent configuration
+  memory         Json? // Agent memory/context
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
   // Relations
-  userId          String
-  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tasks           Task[]
-  metrics         Metric[]
-  
+  userId         String
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks          Task[]
+  metrics        Metric[]
+  AIConversation AIConversation[]
+  File           File[]
+
   @@index([userId])
   @@index([status])
 }
@@ -76,26 +81,29 @@ enum AgentStatus {
 
 // Project Model
 model Project {
-  id              String        @id @default(uuid())
-  name            String
-  description     String?
-  status          ProjectStatus @default(PLANNING)
-  priority        Priority      @default(MEDIUM)
-  progress        Float         @default(0.0)
-  budget          Float?
-  spent           Float         @default(0.0)
-  startDate       DateTime?
-  endDate         DateTime?
-  metadata        Json?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(PLANNING)
+  priority    Priority      @default(MEDIUM)
+  progress    Float         @default(0.0)
+  budget      Float?
+  spent       Float         @default(0.0)
+  startDate   DateTime?
+  endDate     DateTime?
+  metadata    Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
   // Relations
   userId          String
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks           Task[]
   milestones      Milestone[]
-  
+  AIConversation  AIConversation[]
+  File            File[]
+  AIProcessingJob AIProcessingJob[]
+
   @@index([userId])
   @@index([status])
 }
@@ -117,28 +125,30 @@ enum Priority {
 
 // Task Model
 model Task {
-  id              String      @id @default(uuid())
-  title           String
-  description     String?
-  status          TaskStatus  @default(PENDING)
-  priority        Priority    @default(MEDIUM)
-  progress        Float       @default(0.0)
-  estimatedTime   Int?        // in minutes
-  actualTime      Int?        // in minutes
-  dependencies    Json?       // Array of task IDs
-  result          Json?
-  error           String?
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
+  id            String     @id @default(uuid())
+  title         String
+  description   String?
+  status        TaskStatus @default(PENDING)
+  priority      Priority   @default(MEDIUM)
+  progress      Float      @default(0.0)
+  estimatedTime Int? // in minutes
+  actualTime    Int? // in minutes
+  dependencies  Json? // Array of task IDs
+  result        Json?
+  error         String?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
   // Relations
   projectId       String
-  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project         Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   agentId         String?
-  agent           Agent?      @relation(fields: [agentId], references: [id], onDelete: SetNull)
-  
+  agent           Agent?            @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  File            File[]
+  AIProcessingJob AIProcessingJob[]
+
   @@index([projectId])
   @@index([agentId])
   @@index([status])
@@ -155,19 +165,19 @@ enum TaskStatus {
 
 // Command Model
 model Command {
-  id              String        @id @default(uuid())
-  text            String
-  status          CommandStatus @default(PROCESSING)
-  response        String?
-  metadata        Json?
-  executionTime   Int?          // in milliseconds
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
+  id            String        @id @default(uuid())
+  text          String
+  status        CommandStatus @default(PROCESSING)
+  response      String?
+  metadata      Json?
+  executionTime Int? // in milliseconds
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
   // Relations
-  userId          String
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([status])
   @@index([createdAt])
@@ -182,17 +192,17 @@ enum CommandStatus {
 
 // Metric Model
 model Metric {
-  id              String    @id @default(uuid())
-  type            String    // cpu, memory, performance, etc.
-  value           Float
-  unit            String?
-  metadata        Json?
-  timestamp       DateTime  @default(now())
-  
+  id        String   @id @default(uuid())
+  type      String // cpu, memory, performance, etc.
+  value     Float
+  unit      String?
+  metadata  Json?
+  timestamp DateTime @default(now())
+
   // Relations
-  agentId         String?
-  agent           Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  
+  agentId String?
+  agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
   @@index([agentId])
   @@index([type])
   @@index([timestamp])
@@ -200,70 +210,70 @@ model Metric {
 
 // Milestone Model
 model Milestone {
-  id              String    @id @default(uuid())
-  title           String
-  description     String?
-  targetDate      DateTime
-  isCompleted     Boolean   @default(false)
-  completedAt     DateTime?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  targetDate  DateTime
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
   // Relations
-  projectId       String
-  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
   @@index([projectId])
 }
 
 // Knowledge Base Model
 model Knowledge {
-  id              String    @id @default(uuid())
-  title           String
-  content         String
-  category        String?
-  tags            String[]
-  embedding       Json?     // Vector embedding for semantic search
-  metadata        Json?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  
+  id        String   @id @default(uuid())
+  title     String
+  content   String
+  category  String?
+  tags      String[]
+  embedding Json? // Vector embedding for semantic search
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([category])
   @@index([tags])
 }
 
 // API Key Model
 model ApiKey {
-  id              String    @id @default(uuid())
-  name            String
-  key             String    @unique
-  isActive        Boolean   @default(true)
-  lastUsedAt      DateTime?
-  expiresAt       DateTime?
-  createdAt       DateTime  @default(now())
-  
+  id         String    @id @default(uuid())
+  name       String
+  key        String    @unique
+  isActive   Boolean   @default(true)
+  lastUsedAt DateTime?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+
   // Relations
-  userId          String
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
   @@index([key])
 }
 
 // Blockchain Transaction Model
 model Transaction {
-  id              String    @id @default(uuid())
-  hash            String    @unique
-  from            String
-  to              String
-  value           String
-  gasUsed         String?
-  status          String
-  blockNumber     Int?
-  network         String    // ethereum, polygon, etc.
-  metadata        Json?
-  createdAt       DateTime  @default(now())
-  
+  id          String   @id @default(uuid())
+  hash        String   @unique
+  from        String
+  to          String
+  value       String
+  gasUsed     String?
+  status      String
+  blockNumber Int?
+  network     String // ethereum, polygon, etc.
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
   @@index([hash])
   @@index([from])
   @@index([network])
@@ -271,17 +281,129 @@ model Transaction {
 
 // Audit Log Model
 model AuditLog {
-  id              String    @id @default(uuid())
-  action          String
-  entity          String
-  entityId        String
-  userId          String?
-  changes         Json?
-  ipAddress       String?
-  userAgent       String?
-  timestamp       DateTime  @default(now())
-  
+  id        String   @id @default(uuid())
+  action    String
+  entity    String
+  entityId  String
+  userId    String?
+  changes   Json?
+  ipAddress String?
+  userAgent String?
+  timestamp DateTime @default(now())
+
   @@index([userId])
   @@index([entity])
   @@index([timestamp])
+}
+
+// AI Conversation Model
+model AIConversation {
+  id        String   @id @default(uuid())
+  title     String
+  model     String // openai, anthropic, google
+  context   Json? // Context window data
+  summary   String?
+  tokens    Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    String
+  projectId String?
+  agentId   String?
+
+  user     User        @relation(fields: [userId], references: [id])
+  project  Project?    @relation(fields: [projectId], references: [id])
+  agent    Agent?      @relation(fields: [agentId], references: [id])
+  messages AIMessage[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([agentId])
+  @@index([createdAt])
+}
+
+model AIMessage {
+  id             String   @id @default(uuid())
+  role           String // system, user, assistant
+  content        String
+  tokens         Int      @default(0)
+  metadata       Json?
+  createdAt      DateTime @default(now())
+  conversationId String
+
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+// File Model
+model File {
+  id           String   @id @default(uuid())
+  filename     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  url          String?
+  metadata     Json?
+  isPublic     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  userId       String
+  projectId    String?
+  taskId       String?
+  agentId      String?
+
+  user            User              @relation(fields: [userId], references: [id])
+  project         Project?          @relation(fields: [projectId], references: [id])
+  task            Task?             @relation(fields: [taskId], references: [id])
+  agent           Agent?            @relation(fields: [agentId], references: [id])
+  AIProcessingJob AIProcessingJob[]
+
+  @@index([userId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([agentId])
+  @@index([createdAt])
+}
+
+// AI Processing Job Model
+model AIProcessingJob {
+  id          String    @id @default(uuid())
+  type        String // chat, file_analysis, code_generation
+  status      JobStatus @default(PENDING)
+  input       Json
+  output      Json?
+  error       String?
+  tokens      Int       @default(0)
+  cost        Float     @default(0)
+  model       String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  startedAt   DateTime?
+  completedAt DateTime?
+  userId      String
+  fileId      String?
+  projectId   String?
+  taskId      String?
+
+  user    User     @relation(fields: [userId], references: [id])
+  file    File?    @relation(fields: [fileId], references: [id])
+  project Project? @relation(fields: [projectId], references: [id])
+  task    Task?    @relation(fields: [taskId], references: [id])
+
+  @@index([userId])
+  @@index([fileId])
+  @@index([projectId])
+  @@index([taskId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum JobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
 }

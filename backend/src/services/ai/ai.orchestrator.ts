@@ -1,0 +1,330 @@
+import { PrismaClient } from '@prisma/client';
+import { OpenAIService } from './openai.service';
+import { AnthropicService } from './anthropic.service';
+import { AIRequest, AIResponse, FileProcessingRequest, FileProcessingResponse } from './ai.types';
+import { logger } from '../../config/logger';
+import { config } from '../../config/env';
+
+const prisma = new PrismaClient();
+
+export interface AIOrchestratorConfig {
+  provider: 'openai' | 'anthropic' | 'google';
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+}
+
+export class AIOrchestrator {
+  private openaiService: OpenAIService;
+  private anthropicService: AnthropicService;
+  private defaultProvider: string;
+
+  constructor() {
+    this.openaiService = new OpenAIService();
+    this.anthropicService = new AnthropicService();
+    this.defaultProvider = 'openai';
+  }
+
+  async generateChatResponse(
+    conversationId: string,
+    message: string,
+    config: AIOrchestratorConfig = {}
+  ): Promise<{
+    response: string;
+    tokens: number;
+    model: string;
+    conversationId: string;
+  }> {
+    try {
+      // Get or create conversation
+      let conversation = await prisma.aIConversation.findUnique({
+        where: { id: conversationId },
+        include: { messages: { orderBy: { createdAt: 'asc' } } },
+      });
+
+      if (!conversation) {
+        conversation = await prisma.aIConversation.create({
+          data: {
+            id: conversationId,
+            title: message.substring(0, 50) + '...',
+            model: config.model || 'gpt-4',
+            userId: 'system', // This should be actual user ID
+          },
+          include: { messages: true },
+        });
+      }
+
+      // Build message history
+      const messages = conversation.messages.map(msg => ({
+        role: msg.role as any,
+        content: msg.content,
+      }));
+
+      messages.push({ role: 'user', content: message });
+
+      // Generate response
+      const aiResponse = await this.generateAIResponse({
+        messages,
+        model: config.model || conversation.model,
+        maxTokens: config.maxTokens,
+        temperature: config.temperature,
+      });
+
+      // Save messages
+      await prisma.aIMessage.create({
+        data: {
+          role: 'user',
+          content: message,
+          tokens: Math.floor(message.length / 4), // Rough estimate
+          conversationId: conversation.id,
+        },
+      });
+
+      const assistantMessage = await prisma.aIMessage.create({
+        data: {
+          role: 'assistant',
+          content: aiResponse.content,
+          tokens: aiResponse.tokens.completion,
+          conversationId: conversation.id,
+        },
+      });
+
+      // Update conversation
+      await prisma.aIConversation.update({
+        where: { id: conversationId },
+        data: {
+          tokens: { increment: aiResponse.tokens.total },
+          updatedAt: new Date(),
+        },
+      });
+
+      return {
+        response: aiResponse.content,
+        tokens: aiResponse.tokens.total,
+        model: aiResponse.model,
+        conversationId: conversation.id,
+      };
+    } catch (error) {
+      logger.error('Chat response generation error:', error);
+      throw error;
+    }
+  }
+
+  async processFile(
+    request: FileProcessingRequest,
+    config: AIOrchestratorConfig = {}
+  ): Promise<FileProcessingResponse> {
+    try {
+      // Get file details
+      const file = await prisma.file.findUnique({
+        where: { id: request.fileId },
+      });
+
+      if (!file) {
+        throw new Error('File not found');
+      }
+
+      // Create processing job
+      const job = await prisma.aIProcessingJob.create({
+        data: {
+          type: request.operation,
+          status: 'PENDING',
+          input: {
+            fileId: request.fileId,
+            operation: request.operation,
+            context: request.context,
+          },
+          model: config.model || 'gpt-4',
+          userId: 'system', // This should be actual user ID
+          fileId: request.fileId,
+        },
+      });
+
+      // Update job status
+      await prisma.aIProcessingJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'PROCESSING',
+          startedAt: new Date(),
+        },
+      });
+
+      let result: FileProcessingResponse;
+
+      switch (request.operation) {
+        case 'analyze':
+          result = await this.analyzeFile(file, request.context);
+          break;
+        case 'summarize':
+          result = await this.summarizeFile(file, request.context);
+          break;
+        case 'extract':
+          result = await this.extractDataFromFile(file, request.context);
+          break;
+        case 'transform':
+          result = await this.transformFile(file, request.context);
+          break;
+        default:
+          throw new Error(`Unsupported operation: ${request.operation}`);
+      }
+
+      // Update job with results
+      await prisma.aIProcessingJob.update({
+        where: { id: job.id },
+        data: {
+          status: 'COMPLETED',
+          output: result,
+          completedAt: new Date(),
+        },
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('File processing error:', error);
+      
+      // Update job with error
+      await prisma.aIProcessingJob.update({
+        where: { id: request.fileId },
+        data: {
+          status: 'FAILED',
+          error: error.message,
+          completedAt: new Date(),
+        },
+      });
+
+      throw error;
+    }
+  }
+
+  private async generateAIResponse(request: AIRequest): Promise<AIResponse> {
+    const provider = request.provider || this.defaultProvider;
+
+    switch (provider) {
+      case 'openai':
+        return await this.openaiService.generateResponse(request);
+      case 'anthropic':
+        return await this.anthropicService.generateResponse(request);
+      default:
+        throw new Error(`Unsupported AI provider: ${provider}`);
+    }
+  }
+
+  private async analyzeFile(file: any, context?: any): Promise<FileProcessingResponse> {
+    // This would integrate with file reading and AI analysis
+    const prompt = `Analyze this ${file.mimeType} file: ${file.originalName}`;
+    
+    const response = await this.generateAIResponse({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'gpt-4',
+    });
+
+    return {
+      content: response.content,
+      metadata: {
+        fileType: file.mimeType,
+        fileSize: file.size,
+        analysisType: 'general',
+      },
+    };
+  }
+
+  private async summarizeFile(file: any, context?: any): Promise<FileProcessingResponse> {
+    // This would integrate with file reading and AI summarization
+    const prompt = `Summarize the content of this ${file.mimeType} file: ${file.originalName}`;
+    
+    const response = await this.generateAIResponse({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'gpt-4',
+    });
+
+    return {
+      content: response.content,
+      metadata: {
+        fileType: file.mimeType,
+        fileSize: file.size,
+        summaryType: 'brief',
+      },
+    };
+  }
+
+  private async extractDataFromFile(file: any, context?: any): Promise<FileProcessingResponse> {
+    const prompt = `Extract structured data from this ${file.mimeType} file: ${file.originalName}`;
+    
+    const response = await this.generateAIResponse({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'gpt-4',
+    });
+
+    return {
+      content: response.content,
+      metadata: {
+        fileType: file.mimeType,
+        fileSize: file.size,
+        extractionType: 'structured',
+      },
+    };
+  }
+
+  private async transformFile(file: any, context?: any): Promise<FileProcessingResponse> {
+    const prompt = `Transform the content of this ${file.mimeType} file: ${file.originalName}`;
+    
+    const response = await this.generateAIResponse({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'gpt-4',
+    });
+
+    return {
+      content: response.content,
+      metadata: {
+        fileType: file.mimeType,
+        fileSize: file.size,
+        transformationType: 'format',
+      },
+    };
+  }
+
+  async getConversations(userId: string, limit: number = 50, offset: number = 0) {
+    return prisma.aIConversation.findMany({
+      where: { userId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+      skip: offset,
+    });
+  }
+
+  async getConversationMessages(conversationId: string) {
+    return prisma.aIMessage.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async getProcessingJobs(userId: string, status?: string) {
+    return prisma.aIProcessingJob.findMany({
+      where: {
+        userId,
+        ...(status && { status }),
+      },
+      include: {
+        file: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getAvailableModels(): Promise<string[]> {
+    const models = [
+      ...this.openaiService.getModels(),
+      ...this.anthropicService.getModels(),
+    ];
+    return [...new Set(models)];
+  }
+}
+
+export const aiOrchestrator = new AIOrchestrator();

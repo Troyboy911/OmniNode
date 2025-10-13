@@ -50,7 +50,7 @@ app.use((req, res, next) => {
 app.use(`/api/${config.server.apiVersion}`, routes);
 
 // Root route
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.json({
     success: true,
     message: 'Welcome to Omni Node API',

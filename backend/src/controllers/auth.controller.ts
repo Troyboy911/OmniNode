@@ -184,7 +184,7 @@ export class AuthController {
   }
 
   // Logout (optional - mainly for client-side token removal)
-  static async logout(req: Request, res: Response, next: NextFunction) {
+  static async logout(_req: Request, res: Response, next: NextFunction) {
     try {
       // In a real implementation, you might want to blacklist the token
       // For now, we'll just send a success response

@@ -3,6 +3,7 @@ import { prisma } from '@/config/database';
 import { AuthRequest } from '@/types';
 import { sendSuccess, sendCreated, sendPaginated } from '@/utils/response';
 import { NotFoundError } from '@/types';
+import { OpenAIService } from '@/services';
 
 export class CommandController {
   // Get all commands for current user
@@ -71,10 +72,47 @@ export class CommandController {
         },
       });
 
-      // TODO: Queue command for processing by AI agents
-      // This will be implemented in the AI service layer
+      // Process command with AI
+      try {
+        const openai = OpenAIService.getInstance();
+        const response = await openai.generateResponse(text, {
+          systemPrompt: 'You are Omni Node AI assistant. Process user commands and provide helpful responses.',
+        });
 
-      sendCreated(res, command, 'Command queued for execution');
+        // Update command with response
+        await prisma.command.update({
+          where: { id: command.id },
+          data: {
+            status: 'COMPLETED',
+            response,
+            executionTime: 100, // Placeholder
+          },
+        });
+
+        sendCreated(res, {
+          ...command,
+          response,
+          status: 'COMPLETED',
+        }, 'Command processed successfully');
+      } catch (aiError) {
+        console.error('AI processing error:', aiError);
+        
+        // Update command as failed
+        await prisma.command.update({
+          where: { id: command.id },
+          data: {
+            status: 'FAILED',
+            response: 'Failed to process command',
+            executionTime: 0,
+          },
+        });
+
+        sendCreated(res, {
+          ...command,
+          response: 'Failed to process command',
+          status: 'FAILED',
+        }, 'Command processing failed');
+      }
     } catch (error) {
       next(error);
     }

@@ -3,7 +3,7 @@ import { z, ZodSchema } from 'zod';
 import { ValidationError } from '@/types';
 
 export const validate = (schema: ZodSchema) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+  return async (req: Request, _res: Response, next: NextFunction) => {
     try {
       await schema.parseAsync({
         body: req.body,

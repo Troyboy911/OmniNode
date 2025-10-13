@@ -3,6 +3,7 @@ import { prisma } from '@/config/database';
 import { AuthRequest } from '@/types';
 import { sendSuccess, sendCreated, sendPaginated, sendNoContent } from '@/utils/response';
 import { NotFoundError, AuthorizationError } from '@/types';
+import { TaskQueue } from '@/services/queue/task.queue';
 
 export class TaskController {
   // Get all tasks (with optional filters)
@@ -247,12 +248,21 @@ export class TaskController {
           id,
           project: { userId },
         },
+        include: {
+          agent: true,
+          project: true,
+        },
       });
 
       if (!task) {
         throw new NotFoundError('Task not found');
       }
 
+      if (!task.agent) {
+        throw new AuthorizationError('Task must be assigned to an agent');
+      }
+
+      // Update task status
       const updatedTask = await prisma.task.update({
         where: { id },
         data: {
@@ -261,7 +271,15 @@ export class TaskController {
         },
       });
 
-      sendSuccess(res, updatedTask, 'Task started successfully');
+      // Queue task for execution
+      const taskQueue = TaskQueue.getInstance();
+      await taskQueue.addTask(task.id, task.agent.id, {
+        title: task.title,
+        description: task.description,
+        input: req.body.input || {},
+      });
+
+      sendSuccess(res, updatedTask, 'Task started and queued for execution');
     } catch (error) {
       next(error);
     }
