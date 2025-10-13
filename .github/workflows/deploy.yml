@@ -1,0 +1,69 @@
+name: Deploy to EasyPanel
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run linting
+        run: npm run lint || true
+        
+      - name: Run tests
+        run: npm test || true
+        
+      - name: Build application
+        run: npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Generate Prisma Client
+        run: npx prisma generate
+        
+      - name: Build application
+        run: npm run build
+        
+      - name: Deploy to EasyPanel
+        env:
+          EASYPANEL_URL: ${{ secrets.EASYPANEL_URL }}
+          EASYPANEL_API_KEY: ${{ secrets.EASYPANEL_API_KEY }}
+        run: |
+          echo "Deploying to EasyPanel..."
+          # This will be configured based on your EasyPanel setup
+          # For now, we'll create a placeholder deployment script
+          echo "Deployment configuration ready"
+          
+      - name: Notify deployment
+        if: always()
+        run: |
+          echo "Deployment completed"

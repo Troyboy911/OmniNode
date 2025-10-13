@@ -1,12 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { useAuth } from '@/contexts/AuthContext';
+'use client';
 
-interface WebSocketMessage {
-  type: string;
-  data: any;
-  timestamp: string;
-}
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { io, Socket } from 'socket.io-client';
+import { apiClient } from '@/lib/api-client';
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
@@ -14,140 +10,155 @@ interface UseWebSocketOptions {
   maxReconnectAttempts?: number;
 }
 
-export const useWebSocket = (options: UseWebSocketOptions = {}) => {
-  const { autoConnect = true, reconnect = true, maxReconnectAttempts = 5 } = options;
-  const { user, token } = useAuth();
-  const [socket, setSocket] = useState<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
-  const [messages, setMessages] = useState<WebSocketMessage[]>([]);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+interface WebSocketState {
+  isConnected: boolean;
+  error: string | null;
+  reconnectAttempts: number;
+}
+
+interface UseWebSocketReturn {
+  socket: Socket | null;
+  state: WebSocketState;
+  connect: () => void;
+  disconnect: () => void;
+  reconnect: () => void;
+  on: (event: string, callback: (...args: any[]) => void) => void;
+  off: (event: string, callback: (...args: any[]) => void) => void;
+  emit: (event: string, ...args: any[]) => void;
+}
+
+export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketReturn {
+  const {
+    autoConnect = true,
+    reconnect = true,
+    maxReconnectAttempts = 5,
+  } = options;
+
+  const [state, setState] = useState<WebSocketState>({
+    isConnected: false,
+    error: null,
+    reconnectAttempts: 0,
+  });
+
+  const socketRef = useRef<Socket | null>(null);
+  const listenersRef = useRef<Map<string, Set<(...args: any[]) => void>>>(new Map());
+
+  const updateState = useCallback((updates: Partial<WebSocketState>) => {
+    setState(prev => ({ ...prev, ...updates }));
+  }, []);
+
+  const connect = useCallback(() => {
+    try {
+      if (socketRef.current?.connected) {
+        return;
+      }
+
+      const socket = apiClient.connectSocket();
+      socketRef.current = socket;
+
+      // Connection events
+      socket.on('connect', () => {
+        updateState({ isConnected: true, error: null, reconnectAttempts: 0 });
+      });
+
+      socket.on('disconnect', () => {
+        updateState({ isConnected: false });
+      });
+
+      socket.on('connect_error', (error) => {
+        updateState({ error: error.message });
+        
+        if (reconnect && state.reconnectAttempts < maxReconnectAttempts) {
+          setTimeout(() => {
+            updateState({ reconnectAttempts: state.reconnectAttempts + 1 });
+            connect();
+          }, Math.min(1000 * Math.pow(2, state.reconnectAttempts), 30000));
+        }
+      });
+
+      // Re-register all listeners
+      listenersRef.current.forEach((callbacks, event) => {
+        callbacks.forEach(callback => {
+          socket.on(event, callback);
+        });
+      });
+
+    } catch (error) {
+      updateState({ error: error instanceof Error ? error.message : 'Connection failed' });
+    }
+  }, [reconnect, maxReconnectAttempts, state.reconnectAttempts, updateState]);
+
+  const disconnect = useCallback(() => {
+    if (socketRef.current) {
+      apiClient.disconnectSocket();
+      socketRef.current = null;
+      updateState({ isConnected: false, error: null });
+    }
+  }, [updateState]);
+
+  const reconnect = useCallback(() => {
+    disconnect();
+    updateState({ reconnectAttempts: 0 });
+    connect();
+  }, [disconnect, connect, updateState]);
+
+  const on = useCallback((event: string, callback: (...args: any[]) => void) => {
+    if (!listenersRef.current.has(event)) {
+      listenersRef.current.set(event, new Set());
+    }
+    listenersRef.current.get(event)!.add(callback);
+
+    if (socketRef.current?.connected) {
+      socketRef.current.on(event, callback);
+    }
+  }, []);
+
+  const off = useCallback((event: string, callback: (...args: any[]) => void) => {
+    const callbacks = listenersRef.current.get(event);
+    if (callbacks) {
+      callbacks.delete(callback);
+      if (socketRef.current?.connected) {
+        socketRef.current.off(event, callback);
+      }
+    }
+  }, []);
+
+  const emit = useCallback((event: string, ...args: any[]) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit(event, ...args);
+    }
+  }, []);
 
   useEffect(() => {
-    if (!token || !autoConnect) return;
-
-    const newSocket = io(process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000', {
-      auth: { token },
-      transports: ['websocket', 'polling'],
-      reconnection: reconnect,
-      reconnectionAttempts: maxReconnectAttempts,
-      reconnectionDelay: 1000,
-    });
-
-    setSocket(newSocket);
-
-    newSocket.on('connect', () => {
-      setIsConnected(true);
-      setReconnectAttempts(0);
-      console.log('✅ WebSocket connected');
-    });
-
-    newSocket.on('disconnect', () => {
-      setIsConnected(false);
-      console.log('❌ WebSocket disconnected');
-    });
-
-    newSocket.on('reconnect_attempt', (attempt) => {
-      setReconnectAttempts(attempt);
-      console.log(`🔄 Reconnect attempt ${attempt}`);
-    });
-
-    newSocket.on('reconnect_failed', () => {
-      console.log('❌ Reconnect failed');
-    });
-
-    // Handle incoming messages
-    newSocket.on('ai:chat:stream', (data) => {
-      setMessages(prev => [...prev, { type: 'ai:chat:stream', data, timestamp: new Date().toISOString() }]);
-    });
-
-    newSocket.on('file:upload:progress', (data) => {
-      setMessages(prev => [...prev, { type: 'file:upload:progress', data, timestamp: new Date().toISOString() }]);
-    });
-
-    newSocket.on('agent:status:update', (data) => {
-      setMessages(prev => [...prev, { type: 'agent:status:update', data, timestamp: new Date().toISOString() }]);
-    });
-
-    newSocket.on('system:notification', (data) => {
-      setMessages(prev => [...prev, { type: 'system:notification', data, timestamp: new Date().toISOString() }]);
-    });
+    if (autoConnect) {
+      connect();
+    }
 
     return () => {
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      newSocket.disconnect();
+      disconnect();
     };
-  }, [token, autoConnect, reconnect, maxReconnectAttempts]);
-
-  const emit = (event: string, data: any) => {
-    if (socket && isConnected) {
-      socket.emit(event, data);
-    }
-  };
-
-  const subscribe = (event: string, callback: (data: any) => void) => {
-    if (socket) {
-      socket.on(event, callback);
-    }
-  };
-
-  const unsubscribe = (event: string, callback?: (data: any) => void) => {
-    if (socket) {
-      socket.off(event, callback);
-    }
-  };
-
-  const joinRoom = (roomId: string) => {
-    emit('user:join:room', roomId);
-  };
-
-  const leaveRoom = (roomId: string) => {
-    emit('user:leave:room', roomId);
-  };
-
-  const subscribeToAgent = (agentId: string) => {
-    emit('agent:subscribe', agentId);
-  };
-
-  const unsubscribeFromAgent = (agentId: string) => {
-    emit('agent:unsubscribe', agentId);
-  };
+  }, [autoConnect, connect, disconnect]);
 
   return {
-    socket,
-    isConnected,
-    messages,
+    socket: socketRef.current,
+    state,
+    connect,
+    disconnect,
+    reconnect,
+    on,
+    off,
     emit,
-    subscribe,
-    unsubscribe,
-    joinRoom,
-    leaveRoom,
-    subscribeToAgent,
-    unsubscribeFromAgent,
   };
-};
+}
 
-// WebSocket context for global state
-import { createContext, useContext } from 'react';
+// Specialized hooks for specific events
+export function useSocketEvent(event: string, callback: (...args: any[]) => void) {
+  const { on, off } = useWebSocket();
 
-const WebSocketContext = createContext<ReturnType<typeof useWebSocket> | null>(null);
-
-export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const webSocket = useWebSocket();
-  
-  return (
-    <WebSocketContext.Provider value={webSocket}>
-      {children}
-    </WebSocketContext.Provider>
-  );
-};
-
-export const useWebSocketContext = () => {
-  const context = useContext(WebSocketContext);
-  if (!context) {
-    throw new Error('useWebSocketContext must be used within a WebSocketProvider');
-  }
-  return context;
-};
+  useEffect(() => {
+    on(event, callback);
+    return () => {
+      off(event, callback);
+    };
+  }, [event, callback, on, off]);
+}

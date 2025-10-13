@@ -1,6 +1,8 @@
 import { PrismaClient } from '@prisma/client';
 import { OpenAIService } from './openai.service';
 import { AnthropicService } from './anthropic.service';
+import { ClaudeService } from './claude.service';
+import { OllamaService } from './ollama.service';
 import { AIRequest, AIResponse, FileProcessingRequest, FileProcessingResponse } from './ai.types';
 import { logger } from '../../config/logger';
 import { config } from '../../config/env';

@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { apiClient } from '@/lib/api-client';
 import NeuralBackground from '@/components/NeuralBackground';
 import AgentCard from '@/components/AgentCard';
 import SystemMetricsPanel from '@/components/SystemMetrics';
@@ -12,7 +14,9 @@ import AgentSynthesizer from '@/components/AgentSynthesizer';
 import AscensionDashboard from '@/components/AscensionDashboard';
 import PanNetworkDashboard from '@/components/PanNetworkDashboard';
 import NeuralCockpitV2 from '@/components/NeuralCockpitV2';
-import { mockAgents, mockSystemMetrics, mockProjects } from '@/lib/mockData';
+import EnhancedDashboard from '@/components/EnhancedDashboard';
+import AIChatInterface from '@/components/AIChatInterface';
+import FileUploadInterface from '@/components/FileUploadInterface';
 import { 
   Brain, 
   LayoutDashboard, 
@@ -20,19 +24,41 @@ import {
   DollarSign, 
   Link2, 
   Sparkles,
-  Target,
-  Menu,
-  X,
-  Zap,
-  Network,
-  Eye
+  Target, 
+  Menu, 
+  X, 
+  Zap, 
+  Network, 
+  Eye,
+  FileText
 } from 'lucide-react';
 
-type TabType = 'overview' | 'agents' | 'strategic' | 'economic' | 'blockchain' | 'synthesizer' | 'ascension' | 'pannetwork' | 'cockpitv2';
+type TabType = 'overview' | 'agents' | 'strategic' | 'economic' | 'blockchain' | 'synthesizer' | 'ascension' | 'pannetwork' | 'cockpitv2' | 'ai' | 'files';
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const router = useRouter();
+
+  useEffect(() => {
+    // Check authentication
+    const checkAuth = async () => {
+      try {
+        const currentUser = await apiClient.getCurrentUser();
+        setUser(currentUser);
+      } catch (error) {
+        // Not authenticated, redirect to login
+        router.push('/login');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
 
   const tabs = [
     { id: 'overview' as TabType, name: 'Overview', icon: LayoutDashboard },
@@ -44,7 +70,24 @@ export default function Dashboard() {
     { id: 'synthesizer' as TabType, name: 'Agent Synthesizer', icon: Sparkles },
     { id: 'economic' as TabType, name: 'Economic Dashboard', icon: DollarSign },
     { id: 'blockchain' as TabType, name: 'Blockchain', icon: Link2 },
+    { id: 'ai' as TabType, name: 'AI Assistant', icon: Brain },
+    { id: 'files' as TabType, name: 'File Manager', icon: FileText },
   ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <Brain className="w-12 h-12 text-blue-400 mx-auto mb-4 animate-pulse" />
+          <p className="text-gray-400">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null; // Will redirect to login
+  }
 
   return (
     <main className="min-h-screen relative">
@@ -129,55 +172,30 @@ export default function Dashboard() {
                 {activeTab === 'synthesizer' && 'Create new specialized AI agents'}
                 {activeTab === 'economic' && 'Track financial metrics and projections'}
                 {activeTab === 'blockchain' && 'Monitor smart contracts and transactions'}
+                {activeTab === 'ai' && 'Chat with AI assistants and get intelligent insights'}
+                {activeTab === 'files' && 'Upload, manage, and process files with AI'}
               </p>
             </header>
 
             {/* Content */}
             <div>
-              {activeTab === 'overview' && (
-                <div className="space-y-8">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2">
-                      <ProjectOverview project={mockProjects[0]} />
-                    </div>
-                    <div>
-                      <SystemMetricsPanel metrics={mockSystemMetrics} />
-                    </div>
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-white mb-4">Active Agents</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {mockAgents.slice(0, 6).map((agent) => (
-                        <AgentCard key={agent.id} agent={agent} />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              )}
-
+              {activeTab === 'overview' && <EnhancedDashboard />}
               {activeTab === 'ascension' && <AscensionDashboard />}
-
               {activeTab === 'pannetwork' && <PanNetworkDashboard />}
-
               {activeTab === 'cockpitv2' && <NeuralCockpitV2 agents={mockAgents} />}
-
               {activeTab === 'agents' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {mockAgents.map((agent) => (
-                    <AgentCard key={agent.id} agent={agent} />
-                  ))}
+                  {/* Agent content will be loaded via EnhancedDashboard */}
                 </div>
               )}
-
               {activeTab === 'strategic' && (
                 <StrategicPlanner command="Build a decentralized art gallery with NFT marketplace" />
               )}
-
               {activeTab === 'synthesizer' && <AgentSynthesizer />}
-
               {activeTab === 'economic' && <EconomicDashboard />}
-
               {activeTab === 'blockchain' && <BlockchainIntegration />}
+              {activeTab === 'ai' && <AIChatInterface />}
+              {activeTab === 'files' && <FileUploadInterface projectId={selectedProject} />}
             </div>
           </div>
         </div>

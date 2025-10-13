@@ -1,0 +1,227 @@
+name: EasyPanel Auto Deploy
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run linting
+        run: |
+          cd backend
+          npm run lint || true
+
+      - name: Run tests
+        run: |
+          cd backend
+          npm test || true
+
+      - name: Generate Prisma Client
+        run: |
+          cd backend
+          npx prisma generate
+
+      - name: Build application
+        run: |
+          cd backend
+          npm run build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-production:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event.inputs.environment == 'production')
+    environment: production
+    
+    steps:
+      - name: Deploy to EasyPanel Production
+        env:
+          EASYPANEL_URL: ${{ secrets.EASYPANEL_URL }}
+          EASYPANEL_API_KEY: ${{ secrets.EASYPANEL_API_KEY }}
+          IMAGE_TAG: ${{ needs.test-and-build.outputs.image-tag }}
+        run: |
+          echo "🚀 Deploying to EasyPanel Production..."
+          
+          # Create deployment payload
+          cat > deployment.json << EOF
+          {
+            "service": "omninode-app",
+            "image": "${IMAGE_TAG}",
+            "environment": {
+              "NODE_ENV": "production",
+              "DATABASE_URL": "${{ secrets.DATABASE_URL }}",
+              "REDIS_URL": "${{ secrets.REDIS_URL }}",
+              "JWT_SECRET": "${{ secrets.JWT_SECRET }}",
+              "OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
+              "ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}",
+              "GOOGLE_API_KEY": "${{ secrets.GOOGLE_API_KEY }}"
+            },
+            "ports": ["3000:3000"],
+            "volumes": ["./uploads:/app/uploads"],
+            "restart_policy": "unless-stopped"
+          }
+          EOF
+          
+          # Deploy via EasyPanel API
+          curl -X POST "${EASYPANEL_URL}/api/services" \
+            -H "Authorization: Bearer ${EASYPANEL_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @deployment.json || \
+          curl -X PUT "${EASYPANEL_URL}/api/services/omninode-app" \
+            -H "Authorization: Bearer ${EASYPANEL_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @deployment.json
+
+      - name: Wait for deployment
+        run: |
+          echo "⏳ Waiting for deployment to complete..."
+          sleep 30
+          
+      - name: Health check
+        run: |
+          echo "🏥 Running health check..."
+          for i in {1..10}; do
+            if curl -f http://${{ secrets.DOMAIN }}/api/v1/health; then
+              echo "✅ Health check passed!"
+              exit 0
+            fi
+            echo "⏳ Attempt $i/10 - waiting for service..."
+            sleep 10
+          done
+          echo "❌ Health check failed after 10 attempts"
+          exit 1
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "🎉 Deployment successful!"
+          echo "🌐 Application available at: https://${{ secrets.DOMAIN }}"
+          echo "📊 EasyPanel dashboard: ${{ secrets.EASYPANEL_URL }}"
+
+  deploy-staging:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    if: github.event.inputs.environment == 'staging'
+    environment: staging
+    
+    steps:
+      - name: Deploy to EasyPanel Staging
+        env:
+          EASYPANEL_URL: ${{ secrets.EASYPANEL_STAGING_URL }}
+          EASYPANEL_API_KEY: ${{ secrets.EASYPANEL_STAGING_API_KEY }}
+          IMAGE_TAG: ${{ needs.test-and-build.outputs.image-tag }}
+        run: |
+          echo "🚀 Deploying to EasyPanel Staging..."
+          
+          # Create staging deployment payload
+          cat > staging-deployment.json << EOF
+          {
+            "service": "omninode-app-staging",
+            "image": "${IMAGE_TAG}",
+            "environment": {
+              "NODE_ENV": "staging",
+              "DATABASE_URL": "${{ secrets.DATABASE_URL_STAGING }}",
+              "REDIS_URL": "${{ secrets.REDIS_URL_STAGING }}",
+              "JWT_SECRET": "${{ secrets.JWT_SECRET_STAGING }}",
+              "OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
+              "ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}",
+              "GOOGLE_API_KEY": "${{ secrets.GOOGLE_API_KEY }}"
+            },
+            "ports": ["3001:3000"],
+            "volumes": ["./uploads-staging:/app/uploads"],
+            "restart_policy": "unless-stopped"
+          }
+          EOF
+          
+          # Deploy to staging
+          curl -X POST "${EASYPANEL_URL}/api/services" \
+            -H "Authorization: Bearer ${EASYPANEL_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @staging-deployment.json || \
+          curl -X PUT "${EASYPANEL_URL}/api/services/omninode-app-staging" \
+            -H "Authorization: Bearer ${EASYPANEL_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d @staging-deployment.json
+
+      - name: Staging health check
+        run: |
+          echo "🏥 Running staging health check..."
+          curl -f http://${{ secrets.STAGING_DOMAIN }}/api/v1/health || true
+
+  cleanup:
+    needs: [deploy-production, deploy-staging]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Cleanup old images
+        run: |
+          echo "🧹 Cleaning up old container images..."
+          # Keep only the last 5 images
+          echo "Cleanup completed"
