@@ -1,0 +1,287 @@
+// Prisma Schema for Omni Node Backend
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Model
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  username      String    @unique
+  password      String
+  firstName     String?
+  lastName      String?
+  role          UserRole  @default(USER)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  
+  // Relations
+  agents        Agent[]
+  projects      Project[]
+  commands      Command[]
+  apiKeys       ApiKey[]
+  
+  @@index([email])
+  @@index([username])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+// Agent Model
+model Agent {
+  id              String      @id @default(uuid())
+  name            String
+  role            String
+  description     String?
+  status          AgentStatus @default(IDLE)
+  capabilities    Json        // Array of capabilities
+  performance     Float       @default(0.0)
+  tasksCompleted  Int         @default(0)
+  successRate     Float       @default(0.0)
+  isActive        Boolean     @default(true)
+  config          Json?       // Agent configuration
+  memory          Json?       // Agent memory/context
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks           Task[]
+  metrics         Metric[]
+  
+  @@index([userId])
+  @@index([status])
+}
+
+enum AgentStatus {
+  IDLE
+  ACTIVE
+  BUSY
+  ERROR
+  OFFLINE
+}
+
+// Project Model
+model Project {
+  id              String        @id @default(uuid())
+  name            String
+  description     String?
+  status          ProjectStatus @default(PLANNING)
+  priority        Priority      @default(MEDIUM)
+  progress        Float         @default(0.0)
+  budget          Float?
+  spent           Float         @default(0.0)
+  startDate       DateTime?
+  endDate         DateTime?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks           Task[]
+  milestones      Milestone[]
+  
+  @@index([userId])
+  @@index([status])
+}
+
+enum ProjectStatus {
+  PLANNING
+  IN_PROGRESS
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Task Model
+model Task {
+  id              String      @id @default(uuid())
+  title           String
+  description     String?
+  status          TaskStatus  @default(PENDING)
+  priority        Priority    @default(MEDIUM)
+  progress        Float       @default(0.0)
+  estimatedTime   Int?        // in minutes
+  actualTime      Int?        // in minutes
+  dependencies    Json?       // Array of task IDs
+  result          Json?
+  error           String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  // Relations
+  projectId       String
+  project         Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  agentId         String?
+  agent           Agent?      @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  
+  @@index([projectId])
+  @@index([agentId])
+  @@index([status])
+}
+
+enum TaskStatus {
+  PENDING
+  QUEUED
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// Command Model
+model Command {
+  id              String        @id @default(uuid())
+  text            String
+  status          CommandStatus @default(PROCESSING)
+  response        String?
+  metadata        Json?
+  executionTime   Int?          // in milliseconds
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  
+  // Relations
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum CommandStatus {
+  PROCESSING
+  EXECUTING
+  COMPLETED
+  FAILED
+}
+
+// Metric Model
+model Metric {
+  id              String    @id @default(uuid())
+  type            String    // cpu, memory, performance, etc.
+  value           Float
+  unit            String?
+  metadata        Json?
+  timestamp       DateTime  @default(now())
+  
+  // Relations
+  agentId         String?
+  agent           Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  
+  @@index([agentId])
+  @@index([type])
+  @@index([timestamp])
+}
+
+// Milestone Model
+model Milestone {
+  id              String    @id @default(uuid())
+  title           String
+  description     String?
+  targetDate      DateTime
+  isCompleted     Boolean   @default(false)
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  @@index([projectId])
+}
+
+// Knowledge Base Model
+model Knowledge {
+  id              String    @id @default(uuid())
+  title           String
+  content         String
+  category        String?
+  tags            String[]
+  embedding       Json?     // Vector embedding for semantic search
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([category])
+  @@index([tags])
+}
+
+// API Key Model
+model ApiKey {
+  id              String    @id @default(uuid())
+  name            String
+  key             String    @unique
+  isActive        Boolean   @default(true)
+  lastUsedAt      DateTime?
+  expiresAt       DateTime?
+  createdAt       DateTime  @default(now())
+  
+  // Relations
+  userId          String
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([key])
+}
+
+// Blockchain Transaction Model
+model Transaction {
+  id              String    @id @default(uuid())
+  hash            String    @unique
+  from            String
+  to              String
+  value           String
+  gasUsed         String?
+  status          String
+  blockNumber     Int?
+  network         String    // ethereum, polygon, etc.
+  metadata        Json?
+  createdAt       DateTime  @default(now())
+  
+  @@index([hash])
+  @@index([from])
+  @@index([network])
+}
+
+// Audit Log Model
+model AuditLog {
+  id              String    @id @default(uuid())
+  action          String
+  entity          String
+  entityId        String
+  userId          String?
+  changes         Json?
+  ipAddress       String?
+  userAgent       String?
+  timestamp       DateTime  @default(now())
+  
+  @@index([userId])
+  @@index([entity])
+  @@index([timestamp])
+}
