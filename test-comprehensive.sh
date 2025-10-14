@@ -79,7 +79,7 @@ BACKEND_PID=$!
 sleep 10
 
 # Start frontend
-cd ../omni-node
+cd ..
 log "Starting frontend server..."
 npm run dev &
 FRONTEND_PID=$!
