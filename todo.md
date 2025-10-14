@@ -25,6 +25,7 @@
 - [x] Fix new issues discovered:
   - [x] Add tsconfig-paths package to backend
   - [x] Fix test-comprehensive.sh path issue
+  - [x] Fix TypeScript unused variable error in app.ts
 - [ ] Commit and push fixes
 - [ ] Verify all workflows pass
 

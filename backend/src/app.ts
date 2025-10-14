@@ -41,7 +41,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(compression());
 
 // Request logging middleware
-app.use((req, res, next) => {
+app.use((req, _res, next) => {
   logger.http(`${req.method} ${req.url}`);
   next();
 });
