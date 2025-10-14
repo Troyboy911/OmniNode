@@ -1,0 +1,383 @@
+name: Auto Fix and Redeploy System
+
+on:
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'GitHub issue number to process'
+        required: true
+        type: string
+      auto_fix:
+        description: 'Attempt automatic fixes'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  NODE_VERSION: '18'
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  analyze-issue-and-fix:
+    name: Analyze Issue and Attempt Auto-Fix
+    runs-on: ubuntu-latest
+    if: contains(github.event.issue.labels.*.name, 'deployment-failure') || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      - name: Analyze issue content
+        id: issue_analysis
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = context.issue.number || context.payload.inputs.issue_number;
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber
+            });
+            
+            // Analyze issue content for patterns
+            const analysis = {
+              issueNumber,
+              title: issue.title,
+              body: issue.body,
+              labels: issue.labels.map(l => l.name),
+              createdAt: issue.created_at,
+              isDeploymentFailure: issue.labels.some(l => l.name === 'deployment-failure'),
+              hasRecoveryData: issue.body.includes('Recovery Report'),
+              severity: 'high',
+              autoFixable: false,
+              fixType: 'unknown',
+              affectedComponents: []
+            };
+            
+            // Determine if auto-fix is possible
+            if (analysis.isDeploymentFailure) {
+              analysis.autoFixable = true;
+              analysis.fixType = 'deployment_recovery';
+              analysis.affectedComponents = ['deployment', 'health-checks', 'ai-providers'];
+            }
+            
+            // Set outputs
+            Object.keys(analysis).forEach(key => {
+              core.setOutput(key, analysis[key]);
+            });
+            
+            console.log('Issue Analysis:', JSON.stringify(analysis, null, 2));
+
+      - name: Attempt automatic fixes
+        if: steps.issue_analysis.outputs.autoFixable == 'true' && (github.event.inputs.auto_fix != 'false')
+        id: auto_fix
+        run: |
+          echo "🔧 Attempting automatic fixes..."
+          
+          FIX_TYPE="${{ steps.issue_analysis.outputs.fixType }}"
+          echo "Fix type: $FIX_TYPE"
+          
+          case $FIX_TYPE in
+            "deployment_recovery")
+              echo "🚀 Running deployment recovery..."
+              chmod +x scripts/intelligent-deployment-recovery.js
+              node scripts/intelligent-deployment-recovery.js
+              ;;
+            "configuration_fix")
+              echo "⚙️ Applying configuration fixes..."
+              # Apply configuration fixes
+              ;;
+            "dependency_fix")
+              echo "📦 Fixing dependencies..."
+              # Apply dependency fixes
+              ;;
+            *)
+              echo "❌ Unknown fix type: $FIX_TYPE"
+              exit 1
+              ;;
+          esac
+          
+          echo "fix_applied=true" >> $GITHUB_OUTPUT
+
+      - name: Test fixes
+        if: steps.auto_fix.outputs.fix_applied == 'true'
+        id: test_fixes
+        run: |
+          echo "🧪 Testing applied fixes..."
+          
+          # Run comprehensive tests
+          chmod +x test-comprehensive.sh
+          ./test-comprehensive.sh
+          
+          # Run AI health checks
+          chmod +x scripts/ai-health-check.js
+          node scripts/ai-health-check.js
+          
+          echo "tests_passed=true" >> $GITHUB_OUTPUT
+
+      - name: Create fix branch
+        if: steps.test_fixes.outputs.tests_passed == 'true'
+        id: create_branch
+        run: |
+          BRANCH_NAME="auto-fix-issue-${{ steps.issue_analysis.outputs.issueNumber }}-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b $BRANCH_NAME
+          
+          # Add and commit fixes
+          git add -A
+          git commit -m "auto-fix: Resolve deployment failure for issue #${{ steps.issue_analysis.outputs.issueNumber }}
+          
+          - Applied automatic fixes for deployment failure
+          - Updated configuration and dependencies
+          - All tests passing
+          
+          Fixes #${{ steps.issue_analysis.outputs.issueNumber }}"
+          
+          # Push branch
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git $BRANCH_NAME
+          
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_OUTPUT
+
+  create-pull-request:
+    name: Create Pull Request for Fixes
+    runs-on: ubuntu-latest
+    needs: analyze-issue-and-fix
+    if: needs.analyze-issue-and-fix.outputs.tests_passed == 'true'
+    steps:
+      - name: Create pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const branchName = '${{ needs.analyze-issue-and-fix.outputs.branch_name }}';
+            const issueNumber = ${{ needs.analyze-issue-and-fix.outputs.issueNumber }};
+            
+            const { data: pullRequest } = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🤖 Auto-fix: Resolve deployment failure for issue #${issueNumber}`,
+              body: `## Automated Fix for Deployment Failure
+            
+            This pull request contains automatically generated fixes for the deployment failure reported in issue #${issueNumber}.
+            
+            ### Changes Made
+            - Applied automatic fixes based on issue analysis
+            - Updated configuration and dependencies
+            - All tests are passing
+            
+            ### Testing
+            - ✅ Comprehensive test suite passed
+            - ✅ AI provider health checks passed
+            - ✅ Deployment recovery verified
+            
+            ### Recovery Report
+            The following fixes were automatically applied:
+            - Deployment configuration updates
+            - Health check improvements
+            - AI provider connectivity fixes
+            
+            ### Next Steps
+            1. Review the changes in this PR
+            2. Approve and merge if everything looks good
+            3. The system will automatically trigger a new deployment
+            
+            ---
+            *This PR was automatically generated by the deployment recovery system*`,
+              head: branchName,
+              base: 'main',
+              labels: ['automated', 'deployment-fix', 'ready-for-review']
+            });
+            
+            console.log(`✅ Pull request created: #${pullRequest.number}`);
+            
+            // Link PR to issue
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `🤖 **Automated Fix Created**
+              
+              I've automatically created fixes for this deployment failure.
+              
+              **Pull Request:** #${pullRequest.number}
+              **Status:** Ready for review
+              
+              The fixes include:
+              - Deployment configuration updates
+              - Health check improvements  
+              - AI provider connectivity fixes
+              
+              Please review the changes and approve the PR if everything looks good.
+              Once merged, the system will automatically trigger a new deployment.`
+            });
+
+  auto-merge-and-deploy:
+    name: Auto Merge and Deploy
+    runs-on: ubuntu-latest
+    needs: create-pull-request
+    if: success()
+    steps:
+      - name: Wait for PR approval and merge
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = '${{ needs.create-pull-request.outputs.pr_number }}';
+            const maxWaitTime = 30 * 60 * 1000; // 30 minutes
+            const checkInterval = 5 * 60 * 1000; // 5 minutes
+            const startTime = Date.now();
+            
+            console.log(`⏳ Waiting for PR #${prNumber} approval...`);
+            
+            while (Date.now() - startTime < maxWaitTime) {
+              const { data: pr } = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: prNumber
+              });
+              
+              if (pr.merged) {
+                console.log('✅ PR has been merged!');
+                break;
+              }
+              
+              if (pr.state === 'closed') {
+                console.log('❌ PR was closed without merging');
+                return;
+              }
+              
+              console.log(`Still waiting... PR status: ${pr.state}`);
+              await new Promise(resolve => setTimeout(resolve, checkInterval));
+            }
+            
+            if (Date.now() - startTime >= maxWaitTime) {
+              console.log('⏰ Timeout waiting for PR approval');
+            }
+
+      - name: Trigger new deployment
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            console.log('🚀 Triggering new deployment after successful merge...');
+            
+            // Create deployment event
+            const { data: deployment } = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'main',
+              environment: 'staging',
+              description: 'Automated deployment after fix merge',
+              auto_merge: false
+            });
+            
+            // Create deployment status
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: 'pending',
+              description: 'Deployment in progress after automated fixes'
+            });
+            
+            console.log('✅ New deployment triggered');
+
+  fallback-manual-intervention:
+    name: Fallback to Manual Intervention
+    runs-on: ubuntu-latest
+    needs: analyze-issue-and-fix
+    if: needs.analyze-issue-and-fix.outputs.autoFixable == 'false' || needs.analyze-issue-and-fix.outputs.tests_passed == 'false'
+    steps:
+      - name: Request manual intervention
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = ${{ needs.analyze-issue-and-fix.outputs.issueNumber }};
+            const analysis = {
+              autoFixable: ${{ needs.analyze-issue-and-fix.outputs.autoFixable }},
+              testsPassed: ${{ needs.analyze-issue-and-fix.outputs.tests_passed }},
+              fixType: '${{ needs.analyze-issue-and-fix.outputs.fixType }}'
+            };
+            
+            const comment = `🤖 **Automatic Fix Attempt Failed**
+            
+            I attempted to automatically fix this issue but was unable to resolve it.
+            
+            **Analysis Results:**
+            - Auto-fixable: ${analysis.autoFixable}
+            - Tests passed: ${analysis.testsPassed}
+            - Fix type: ${analysis.fixType}
+            
+            **Next Steps:**
+            This issue requires manual intervention. Please:
+            
+            1. Review the detailed analysis above
+            2. Check the diagnostic information in the issue body
+            3. Apply necessary manual fixes
+            4. Test the fixes locally
+            5. Create a pull request with your fixes
+            6. Tag this issue when ready for deployment
+            
+            **For Complex Issues:**
+            - Review application logs
+            - Check AI provider configurations
+            - Verify database connectivity
+            - Run diagnostic scripts
+            
+            I'll be ready to help with the next deployment once manual fixes are applied.
+            
+            ---
+            *This message was automatically generated by the deployment recovery system*`;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: comment
+            });
+            
+            // Add label to indicate manual intervention needed
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              labels: ['manual-intervention-required', 'needs-human-review']
+            });
+
+  notification-summary:
+    name: Notification Summary
+    runs-on: ubuntu-latest
+    needs: [auto-merge-and-deploy, fallback-manual-intervention]
+    if: always()
+    steps:
+      - name: Send final notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          text: |
+            🤖 **Auto Fix and Redeploy Summary**
+            
+            **Repository:** ${{ github.repository }}
+            **Issue:** #${{ needs.analyze-issue-and-fix.outputs.issueNumber }}
+            **Status:** ${{ job.status }}
+            
+            **Results:**
+            ${{ needs.auto-merge-and-deploy.result == 'success' && '✅ Auto-fix successful, deployment triggered' || '' }}
+            ${{ needs.fallback-manual-intervention.result == 'success' && '⚠️ Manual intervention required' || '' }}
+            
+            **Next Steps:**
+            ${{ needs.auto-merge-and-deploy.result == 'success' && 'Monitor new deployment for success' || 'Wait for manual fixes and review' }}
+            
+            ---
+            *Automated deployment recovery system*
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}

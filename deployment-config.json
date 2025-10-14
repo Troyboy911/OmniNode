@@ -1,0 +1,114 @@
+{
+  "environments": {
+    "staging": {
+      "baseUrl": "https://staging.omninode.app",
+      "healthCheckEndpoints": [
+        "/health",
+        "/health/db",
+        "/health/redis",
+        "/health/ai"
+      ],
+      "deploymentTimeout": 600,
+      "healthCheckTimeout": 300,
+      "retryAttempts": 3,
+      "retryDelay": 30,
+      "rollbackEnabled": true,
+      "autoRecovery": true,
+      "notificationChannels": ["slack", "github"]
+    },
+    "production": {
+      "baseUrl": "https://omninode.app",
+      "healthCheckEndpoints": [
+        "/health",
+        "/health/db",
+        "/health/redis",
+        "/health/ai",
+        "/health/blockchain"
+      ],
+      "deploymentTimeout": 900,
+      "healthCheckTimeout": 600,
+      "retryAttempts": 5,
+      "retryDelay": 60,
+      "rollbackEnabled": true,
+      "autoRecovery": true,
+      "notificationChannels": ["slack", "github", "email"]
+    }
+  },
+  "aiProviders": {
+    "openai": {
+      "healthEndpoint": "/health/ai/openai",
+      "timeout": 30000,
+      "retryAttempts": 3,
+      "fallbackModels": ["gpt-3.5-turbo", "gpt-4"]
+    },
+    "anthropic": {
+      "healthEndpoint": "/health/ai/anthropic",
+      "timeout": 30000,
+      "retryAttempts": 3,
+      "fallbackModels": ["claude-3-sonnet", "claude-3-haiku"]
+    },
+    "ollama": {
+      "healthEndpoint": "/health/ai/ollama",
+      "timeout": 45000,
+      "retryAttempts": 2,
+      "fallbackModels": ["llama2", "mistral"]
+    }
+  },
+  "monitoring": {
+    "metricsCollection": true,
+    "realTimeAlerts": true,
+    "performanceThresholds": {
+      "apiLatency": 2000,
+      "databaseLatency": 500,
+      "redisLatency": 100,
+      "aiProcessingTime": 10000,
+      "errorRate": 0.05,
+      "cpuUsage": 80,
+      "memoryUsage": 85
+    },
+    "alertChannels": ["slack", "github-issues"],
+    "escalationRules": {
+      "errorRate": "> 10% for 5 minutes",
+      "responseTime": "> 5 seconds for 10 minutes",
+      "availability": "< 95% for any period"
+    }
+  },
+  "notifications": {
+    "slack": {
+      "webhook": "${SLACK_WEBHOOK}",
+      "channels": ["#deployments", "#alerts"],
+      "severityLevels": ["high", "critical"]
+    },
+    "github": {
+      "createIssues": true,
+      "labels": ["deployment-failure", "automated"],
+      "assignees": ["Troyboy911"]
+    },
+    "email": {
+      "recipients": ["admin@omninode.app"],
+      "severityLevels": ["critical"]
+    }
+  },
+  "recovery": {
+    "autoRecoveryEnabled": true,
+    "maxAutoRecoveryAttempts": 3,
+    "recoverySteps": [
+      "service_restart",
+      "cache_clear",
+      "database_reconnect",
+      "ai_provider_recovery",
+      "resource_cleanup"
+    ],
+    "manualInterventionTriggers": [
+      "max_recovery_attempts_exceeded",
+      "critical_service_failure",
+      "data_corruption_detected"
+    ]
+  },
+  "security": {
+    "vulnerabilityScanning": true,
+    "securityHeaders": true,
+    "rateLimiting": true,
+    "auditLogging": true
+  }
+}

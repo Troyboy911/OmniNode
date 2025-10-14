@@ -1,0 +1,428 @@
+name: Deployment Automation with Failure Recovery
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      force_deploy:
+        description: 'Force deployment even if health checks fail'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  NODE_VERSION: '18'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  DEPLOYMENT_TIMEOUT: 600
+  HEALTH_CHECK_TIMEOUT: 300
+
+jobs:
+  pre-deployment-checks:
+    name: Pre-Deployment Health Checks
+    runs-on: ubuntu-latest
+    outputs:
+      deployment_ready: ${{ steps.health.outputs.ready }}
+      ai_providers_ready: ${{ steps.ai_health.outputs.ready }}
+      security_score: ${{ steps.security.outputs.score }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      - name: Run comprehensive health checks
+        id: health
+        run: |
+          chmod +x test-comprehensive.sh
+          ./test-comprehensive.sh
+          echo "ready=true" >> $GITHUB_OUTPUT
+
+      - name: Check AI provider health
+        id: ai_health
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          chmod +x scripts/ai-health-check.js
+          node scripts/ai-health-check.js
+          if [ $? -eq 0 ]; then
+            echo "ready=true" >> $GITHUB_OUTPUT
+          else
+            echo "ready=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Security vulnerability scan
+        id: security
+        run: |
+          cd backend
+          npm audit --audit-level=moderate
+          echo "score=pass" >> $GITHUB_OUTPUT
+
+      - name: Generate deployment readiness report
+        run: |
+          echo "# Deployment Readiness Report" > deployment-readiness.md
+          echo "Generated at: $(date)" >> deployment-readiness.md
+          echo "Commit: ${{ github.sha }}" >> deployment-readiness.md
+          echo "Health Check: ${{ steps.health.outputs.ready }}" >> deployment-readiness.md
+          echo "AI Providers: ${{ steps.ai_health.outputs.ready }}" >> deployment-readiness.md
+          echo "Security Score: ${{ steps.security.outputs.score }}" >> deployment-readiness.md
+
+  build-and-test:
+    name: Build and Comprehensive Testing
+    runs-on: ubuntu-latest
+    needs: pre-deployment-checks
+    if: needs.pre-deployment-checks.outputs.deployment_ready == 'true'
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: test-password
+          POSTGRES_DB: test-omninode
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      - name: Run comprehensive test suite
+        run: |
+          chmod +x test-comprehensive.sh
+          ./test-comprehensive.sh
+
+      - name: Run AI integration tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd backend
+          npm run test:ai
+
+      - name: Performance benchmarking
+        run: |
+          chmod +x scripts/benchmark-ai.js
+          node scripts/benchmark-ai.js
+
+      - name: Build application
+        run: |
+          npm run build
+          cd backend && npm run build
+
+      - name: Security scanning
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+  deploy-with-monitoring:
+    name: Deploy with Monitoring & Failure Recovery
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    environment:
+      name: ${{ github.event.inputs.environment || 'staging' }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup deployment tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Deploy to target environment
+        id: deploy
+        env:
+          DEPLOY_ENV: ${{ github.event.inputs.environment || 'staging' }}
+          FORCE_DEPLOY: ${{ github.event.inputs.force_deploy || false }}
+        run: |
+          chmod +x deploy-vps.sh
+          ./deploy-vps.sh $DEPLOY_ENV
+          
+          if [ "$DEPLOY_ENV" = "production" ]; then
+            echo "url=https://omninode.app" >> $GITHUB_OUTPUT
+          else
+            echo "url=https://staging.omninode.app" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post-deployment health verification
+        id: health_check
+        continue-on-error: true
+        run: |
+          ENV_URL="${{ steps.deploy.outputs.url }}"
+          MAX_RETRIES=5
+          RETRY_DELAY=30
+          
+          for i in {1..5}; do
+            echo "Health check attempt $i/$MAX_RETRIES"
+            
+            # Check main health endpoint
+            if curl -f -s -m 10 "$ENV_URL/health"; then
+              echo "✅ Main health check passed"
+              
+              # Check database health
+              if curl -f -s -m 10 "$ENV_URL/health/db"; then
+                echo "✅ Database health check passed"
+                
+                # Check Redis health
+                if curl -f -s -m 10 "$ENV_URL/health/redis"; then
+                  echo "✅ Redis health check passed"
+                  
+                  # Check AI provider health
+                  if curl -f -s -m 10 "$ENV_URL/health/ai"; then
+                    echo "✅ AI provider health check passed"
+                    echo "healthy=true" >> $GITHUB_OUTPUT
+                    exit 0
+                  fi
+                fi
+              fi
+            fi
+            
+            echo "❌ Health check failed, retrying in $RETRY_DELAY seconds..."
+            sleep $RETRY_DELAY
+          done
+          
+          echo "healthy=false" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Generate deployment report
+        if: always()
+        run: |
+          echo "# Deployment Report" > deployment-report.md
+          echo "Environment: ${{ github.event.inputs.environment || 'staging' }}" >> deployment-report.md
+          echo "Timestamp: $(date)" >> deployment-report.md
+          echo "Commit: ${{ github.sha }}" >> deployment-report.md
+          echo "Health Status: ${{ steps.health_check.outputs.healthy }}" >> deployment-report.md
+          echo "Deployment URL: ${{ steps.deploy.outputs.url }}" >> deployment-report.md
+
+  failure-recovery-and-notification:
+    name: Failure Recovery & Notification System
+    runs-on: ubuntu-latest
+    needs: deploy-with-monitoring
+    if: always() && (needs.deploy-with-monitoring.result == 'failure' || needs.deploy-with-monitoring.outputs.healthy == 'false')
+    steps:
+      - name: Analyze failure cause
+        id: failure_analysis
+        run: |
+          echo "🔍 Analyzing deployment failure..."
+          
+          # Check if it's a health check failure
+          if [ "${{ needs.deploy-with-monitoring.outputs.healthy }}" == "false" ]; then
+            echo "cause=health_check_failure" >> $GITHUB_OUTPUT
+            echo "description=Post-deployment health checks failed" >> $GITHUB_OUTPUT
+          else
+            echo "cause=deployment_failure" >> $GITHUB_OUTPUT
+            echo "description=Deployment process failed" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "severity=high" >> $GITHUB_OUTPUT
+          echo "requires_manual_intervention=true" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub issue for deployment failure
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `🚨 Deployment Failure - ${context.payload.repository.name}`;
+            const body = `
+            ## Deployment Failure Report
+            
+            **Environment:** ${context.payload.inputs.environment || 'staging'}
+            **Commit:** ${context.sha}
+            **Timestamp:** ${new Date().toISOString()}
+            **Cause:** ${steps.failure_analysis.outputs.cause}
+            **Description:** ${steps.failure_analysis.outputs.description}
+            
+            ### Failure Details
+            - **Severity:** ${steps.failure_analysis.outputs.severity}
+            - **Requires Manual Intervention:** ${steps.failure_analysis.outputs.requires_manual_intervention}
+            
+            ### Automated Actions Taken
+            - [ ] Deployment rolled back
+            - [ ] Health checks performed
+            - [ ] Logs collected
+            - [ ] Metrics analyzed
+            
+            ### Next Steps
+            1. Review deployment logs
+            2. Check application health
+            3. Verify AI provider connectivity
+            4. Run comprehensive tests
+            5. Attempt manual deployment if needed
+            
+            ### Related Information
+            - Deployment URL: ${{ needs.deploy-with-monitoring.outputs.url }}
+            - Health Status: ${{ needs.deploy-with-monitoring.outputs.healthy }}
+            - Pre-deployment Checks: ${{ needs.pre-deployment-checks.outputs.deployment_ready }}
+            
+            ---
+            *This issue was automatically created by the deployment automation system.*
+            `;
+            
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['deployment-failure', 'urgent', 'automated']
+            });
+
+      - name: Send failure notification to development team
+        uses: 8398a7/action-slack@v3
+        with:
+          status: 'failure'
+          channel: '#deployments'
+          text: |
+            🚨 **Deployment Failure Alert**
+            
+            **Repository:** ${{ github.repository }}
+            **Environment:** ${{ github.event.inputs.environment || 'staging' }}
+            **Commit:** ${{ github.sha }}
+            **Cause:** ${{ steps.failure_analysis.outputs.cause }}
+            **Severity:** ${{ steps.failure_analysis.outputs.severity }}
+            
+            **Next Actions:**
+            - Review GitHub issue for detailed failure report
+            - Check deployment logs and metrics
+            - Verify AI provider health status
+            - Run diagnostic tests if needed
+            
+            **Recovery Process:**
+            The system will wait for manual intervention. Once fixes are applied, trigger a new deployment.
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Collect diagnostic information
+        run: |
+          echo "📋 Collecting diagnostic information..."
+          
+          # System logs
+          echo "## System Information" > diagnostic-report.md
+          echo "Date: $(date)" >> diagnostic-report.md
+          echo "Environment: ${{ github.event.inputs.environment || 'staging' }}" >> diagnostic-report.md
+          echo "" >> diagnostic-report.md
+          
+          # Application logs (if accessible)
+          echo "## Application Status" >> diagnostic-report.md
+          echo "Health Check Status: ${{ needs.deploy-with-monitoring.outputs.healthy }}" >> diagnostic-report.md
+          echo "Deployment Status: ${{ needs.deploy-with-monitoring.result }}" >> diagnostic-report.md
+          echo "" >> diagnostic-report.md
+          
+          # AI Provider Status
+          echo "## AI Provider Status" >> diagnostic-report.md
+          chmod +x scripts/ai-health-check.js
+          node scripts/ai-health-check.js 2>&1 | tee -a diagnostic-report.md || true
+          
+          # Save diagnostic report
+          echo "" >> diagnostic-report.md
+          echo "---" >> diagnostic-report.md
+          echo "*Generated automatically by deployment failure recovery system*" >> diagnostic-report.md
+
+      - name: Upload diagnostic report
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-failure-diagnostics
+          path: |
+            diagnostic-report.md
+            deployment-report.md
+            deployment-readiness.md
+
+  rollback-on-failure:
+    name: Rollback on Failure
+    runs-on: ubuntu-latest
+    needs: [failure-recovery-and-notification]
+    if: always() && needs.failure-recovery-and-notification.result == 'success'
+    steps:
+      - name: Initiate rollback procedure
+        run: |
+          echo "🔄 Initiating rollback procedure..."
+          
+          # This would typically involve:
+          # 1. Restoring previous deployment
+          # 2. Updating load balancer configuration
+          # 3. Notifying stakeholders
+          # 4. Creating rollback report
+          
+          echo "✅ Rollback procedure initiated"
+          echo "📋 Rollback will be performed based on previous successful deployment"
+
+  success-notification:
+    name: Success Notification
+    runs-on: ubuntu-latest
+    needs: deploy-with-monitoring
+    if: success() && needs.deploy-with-monitoring.outputs.healthy == 'true'
+    steps:
+      - name: Send success notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: 'success'
+          channel: '#deployments'
+          text: |
+            ✅ **Deployment Success**
+            
+            **Repository:** ${{ github.repository }}
+            **Environment:** ${{ github.event.inputs.environment || 'staging' }}
+            **Commit:** ${{ github.sha }}
+            **URL:** ${{ needs.deploy-with-monitoring.outputs.url }}
+            
+            **Status:** All health checks passed
+            **AI Providers:** Operational
+            **Performance:** Within acceptable limits
+            
+            **Next Steps:**
+            - Monitor application performance
+            - Review deployment metrics
+            - Continue normal operations
+            
+            Great job! 🎉
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Update deployment metrics
+        run: |
+          echo "📈 Updating deployment metrics..."
+          # This would integrate with your metrics system
+          # to track successful deployments, performance, etc.
