@@ -74,6 +74,12 @@ log "Starting services for testing..."
 # Start backend
 cd backend
 log "Starting backend server..."
+# Set test environment variables
+export DATABASE_URL="postgresql://test:test@localhost:5432/test"
+export JWT_SECRET="test-jwt-secret-for-ci-cd-testing-only"
+export JWT_REFRESH_SECRET="test-jwt-refresh-secret-for-ci-cd-testing-only"
+export REDIS_URL="redis://localhost:6379"
+export NODE_ENV="test"
 npm run dev &
 BACKEND_PID=$!
 sleep 10

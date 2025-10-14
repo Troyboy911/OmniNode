@@ -9,26 +9,27 @@
 
 ### 1. Update GitHub Workflows
 - [x] Modify all workflows to use `npm install --legacy-peer-deps` instead of `npm ci`
-- [x] Update deployment-automation.yml (4 occurrences)
-- [x] Update enhanced-ci-cd.yml (9 occurrences)
-- [x] Update auto-fix-and-redeploy.yml (2 occurrences)
-- [x] Update ai-integration-test.yml (6 occurrences)
+- [x] Update deployment-automation.yml (4 occurrences updated)
+- [x] Update enhanced-ci-cd.yml (9 occurrences updated)
+- [x] Update auto-fix-and-redeploy.yml (2 occurrences updated)
+- [x] Update ai-integration-test.yml (6 occurrences updated)
 
 ### 2. Update Package Configuration
 - [x] Add .npmrc file to configure legacy peer deps by default
 - [x] Add backend/.npmrc file for backend dependencies
 
-### 3. Test and Verify
-- [x] Commit changes
-- [x] Push to GitHub
-- [x] Monitor workflow execution
-- [x] Fix new issues discovered:
-  - [x] Add tsconfig-paths package to backend
-  - [x] Fix test-comprehensive.sh path issue
-  - [x] Fix TypeScript unused variable error in app.ts
-- [ ] Commit and push fixes
+### 3. Fix Backend Issues
+- [x] Add tsconfig-paths package to backend devDependencies
+- [x] Fix test-comprehensive.sh path issue (cd ../omni-node -> cd ..)
+- [x] Fix TypeScript unused variable error in app.ts
+- [x] Add test environment variables to test-comprehensive.sh
+
+### 4. Test and Verify
+- [ ] Commit and push all fixes
+- [ ] Monitor workflow execution
 - [ ] Verify all workflows pass
 
-### 4. Documentation
+### 5. Documentation
 - [ ] Update AUTOMATION_SETUP_GUIDE.md with dependency notes
 - [ ] Add troubleshooting section for common issues
+- [ ] Document environment variable requirements
