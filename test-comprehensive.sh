@@ -195,4 +195,22 @@ run_test "API response time" "timeout 5 bash -c 'time curl -s $BACKEND_URL/api/h
 
 # Load tests
 log "Running load tests..."
-run_test "Load test" "timeout 10 bash -c 'for i in {1
+run_test "Load test" "timeout 10 bash -c 'for i in {1..20}; do curl -s $BACKEND_URL/api/health > /dev/null; done'"
+
+# Test cleanup
+log "Cleaning up test files..."
+rm -f test-upload.txt
+
+# Summary
+log "Test Summary:"
+log "Total tests: $TOTAL_TESTS"
+success "Passed: $PASSED_TESTS"
+error "Failed: $FAILED_TESTS"
+
+if [ $FAILED_TESTS -eq 0 ]; then
+    success "All tests passed! 🎉"
+    exit 0
+else
+    error "Some tests failed. Please check the logs above. ❌"
+    exit 1
+fi

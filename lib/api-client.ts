@@ -310,24 +310,6 @@ class ApiClient {
   }
 
 // File APIs
-export const fileAPI = {
-  upload: (formData: FormData) => apiClient.post('/files/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  }),
-  getFiles: (params?: any) => apiClient.get('/files', { params }),
-  getFile: (id: string) => apiClient.get(`/files/${id}`),
-  downloadFile: (id: string) => apiClient.get(`/files/${id}/download`, { responseType: 'blob' }),
-  deleteFile: (id: string) => apiClient.delete(`/files/${id}`),
-  getStats: () => apiClient.get('/files/stats'),
-};
-
-// Project APIs
-export const projectAPI = {
-  getProjects: (params?: any) => apiClient.get('/projects', { params }),
-  getProject: (id: string) => apiClient.get(`/projects/${id}`),
-  createProject: (data: any) => apiClient.post('/projects', data),
-  updateProject: (id: string, data: any) => apiClient.put(`/projects/${id}`, data),
-  deleteProject: (id: string) => apiClient.delete(`/projects/${id}`),
 };
 
 // Agent APIs
@@ -344,80 +326,19 @@ export const taskAPI = {
   getTasks: (params?: any) => apiClient.get('/tasks', { params }),
   getTask: (id: string) => apiClient.get(`/tasks/${id}`),
   createTask: (data: any) => apiClient.post('/tasks', data),
-  updateTask: (id: string, data: any) => apiClient.put(`/tasks/${id}`, data),
-  deleteTask: (id: string) => apiClient.delete(`/tasks/${id}`),
-};
 
-// Command APIs
-export const commandAPI = {
-  getCommands: (params?: any) => apiClient.get('/commands', { params }),
-  createCommand: (data: any) => apiClient.post('/commands', data),
-};
-
-// WebSocket
-  connectSocket() {
-    if (this.socket) {
-      this.socket.disconnect();
-    }
-
-    this.socket = io(WS_BASE_URL, {
-      auth: {
-        token: this.getToken()
-      }
-    });
-
-    return this.socket;
-  }
-
-  disconnectSocket() {
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
-    }
-  }
-
-  getSocket() {
-    return this.socket;
-  }
 
   // Health check
   async checkHealth() {
     const response = await this.axiosInstance.get('/health');
     return response.data;
+
   }
-}
-
-// Legacy API exports for backward compatibility
-const apiClient = new ApiClient();
-
-export const authAPI = {
-  register: (data: any) => apiClient.register(data),
-  login: (data: any) => apiClient.login(data),
-  refresh: () => apiClient.refreshToken(),
-  logout: () => apiClient.logout(),
-  me: () => apiClient.getCurrentUser(),
-};
-
-export const aiAPI = {
-  chat: (data: any) => apiClient.chatWithAI(data.messages, data.model),
-  getConversations: () => Promise.resolve([]), // Not implemented yet
-  getMessages: () => Promise.resolve([]), // Not implemented yet
   processFile: (data: any) => apiClient.generateAIResponse(data.prompt, data.model, data.context),
   getProcessingJobs: () => Promise.resolve([]), // Not implemented yet
   getModels: () => apiClient.getAIModels(),
 };
 
-export const fileAPI = {
-  upload: (formData: FormData) => {
-    const file = formData.get('file') as File;
-    const projectId = formData.get('projectId') as string;
-    return apiClient.uploadFile(file, projectId);
-  },
-  getFiles: (params?: any) => apiClient.getFiles(params?.projectId),
-  getFile: (id: string) => Promise.resolve({}), // Not implemented yet
-  downloadFile: (id: string) => Promise.resolve(new Blob()), // Not implemented yet
-  deleteFile: (id: string) => apiClient.deleteFile(id),
-  getStats: () => Promise.resolve({}), // Not implemented yet
 };
 
 export const projectAPI = {
@@ -428,16 +349,6 @@ export const projectAPI = {
   deleteProject: (id: string) => apiClient.deleteProject(id),
 };
 
-export const agentAPI = {
-  getAgents: (params?: any) => apiClient.getAgents(params?.projectId),
-  getAgent: (id: string) => apiClient.getAgent(id),
-  createAgent: (data: any) => apiClient.createAgent(data),
-  updateAgent: (id: string, data: any) => apiClient.updateAgent(id, data),
-  deleteAgent: (id: string) => apiClient.deleteAgent(id),
-};
-
-export const taskAPI = {
-  getTasks: (params?: any) => apiClient.getTasks(params?.agentId),
   getTask: (id: string) => apiClient.getTasks().then(tasks => tasks.find((t: Task) => t.id === id)),
   createTask: (data: any) => apiClient.createTask(data),
   updateTask: (id: string, data: any) => apiClient.updateTask(id, data),

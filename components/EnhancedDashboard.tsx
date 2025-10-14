@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient, Project, Agent, Task, Command } from '@/lib/api-client';
 import { useWebSocket, useProjectUpdates, useAgentUpdates, useTaskUpdates } from '@/hooks/useWebSocket';
-import { Brain, Plus, RefreshCw, Settings, Activity, Users, Target, FileText } from 'lucide-react';
+import { Brain, Plus, RefreshCw, Settings, Activity, Users, Target, FileText, Zap, Network } from 'lucide-react';
 
 interface DashboardProps {
   initialData?: {
@@ -18,10 +18,14 @@ export default function EnhancedDashboard({ initialData }: DashboardProps) {
   const [projects, setProjects] = useState<Project[]>(initialData?.projects || []);
   const [agents, setAgents] = useState<Agent[]>(initialData?.agents || []);
   const [tasks, setTasks] = useState<Task[]>(initialData?.tasks || []);
+  const [metrics, setMetrics] = useState<any>(null);
   const [loading, setLoading] = useState(!initialData);
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showCreateAgent, setShowCreateAgent] = useState(false);
+  const [showOrchestration, setShowOrchestration] = useState(false);
+  const [orchestrationGoal, setOrchestrationGoal] = useState('');
+  const [orchestrationResult, setOrchestrationResult] = useState<any>(null);
   const router = useRouter();
 
   const { state: wsState, on, emit } = useWebSocket();

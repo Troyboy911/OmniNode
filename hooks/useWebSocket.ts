@@ -96,7 +96,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     }
   }, [updateState]);
 
-  const reconnect = useCallback(() => {
+  const handleReconnect = useCallback(() => {
     disconnect();
     updateState({ reconnectAttempts: 0 });
     connect();
@@ -144,7 +144,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     state,
     connect,
     disconnect,
-    reconnect,
+    handleReconnect,
     on,
     off,
     emit,

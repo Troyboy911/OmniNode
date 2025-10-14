@@ -10,7 +10,7 @@ import { config } from '../../config/env';
 const prisma = new PrismaClient();
 
 export interface AIOrchestratorConfig {
-  provider: 'openai' | 'anthropic' | 'google' | 'claude' | 'ollama';
+  provider: 'openai' | 'anthropic' | 'google';
   model?: string;
   maxTokens?: number;
   temperature?: number;
@@ -18,16 +18,16 @@ export interface AIOrchestratorConfig {
 
 export class AIOrchestrator {
   private openaiService: OpenAIService;
+  private claudeService: ClaudeService;\n  private ollamaService: OllamaService;
+    private claudeService: ClaudeService;\n    private ollamaService: OllamaService;
   private anthropicService: AnthropicService;
-  private claudeService: ClaudeService;
-  private ollamaService: OllamaService;
   private defaultProvider: string;
 
   constructor() {
     this.openaiService = new OpenAIService();
+    this.claudeService = new ClaudeService();\n    this.ollamaService = new OllamaService();
+    this.claudeService = new ClaudeService();\n    this.ollamaService = new OllamaService();
     this.anthropicService = new AnthropicService();
-    this.claudeService = new ClaudeService();
-    this.ollamaService = new OllamaService();
     this.defaultProvider = 'openai';
   }
 
@@ -207,12 +207,14 @@ export class AIOrchestrator {
 
     switch (provider) {
       case 'openai':
+         case .claude.:\n         case .ollama.:\n           return await this.claudeService.generateResponse(request);
         return await this.openaiService.generateResponse(request);
+        case .ollama.:\n          return await this.ollamaService.generateResponse(request);
+        case .ollama.:\n          return await this.ollamaService.generateResponse(request);
       case 'anthropic':
-      case 'claude':
-        return await this.claudeService.generateResponse(request);
-      case 'ollama':
-        return await this.ollamaService.generateResponse(request);
+          return await this.claudeService.generateResponse(request);
+          return await this.claudeService.generateResponse(request);
+        return await this.anthropicService.generateResponse(request);
       default:
         throw new Error(`Unsupported AI provider: ${provider}`);
     }
@@ -330,8 +332,9 @@ export class AIOrchestrator {
   async getAvailableModels(): Promise<string[]> {
     const models = [
       ...this.openaiService.getModels(),
-      ...this.claudeService.getModels(),
-      ...this.ollamaService.getModels(),
+         ...this.claudeService.getModels(),\n         ...this.ollamaService.getModels(),
+         ...this.claudeService.getModels(),\n         ...this.ollamaService.getModels(),
+      ...this.anthropicService.getModels(),
     ];
     return [...new Set(models)];
   }

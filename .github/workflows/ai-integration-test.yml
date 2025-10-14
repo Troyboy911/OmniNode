@@ -1,0 +1,129 @@
+name: AI Integration Testing
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Run every 6 hours
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  ai-provider-health-check:
+    name: AI Provider Health Monitoring
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      - name: Test OpenAI Integration
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          cd backend
+          npm run test:ai:openai
+
+      - name: Test Claude Integration
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd backend
+          npm run test:ai:claude
+
+      - name: Test Ollama Integration
+        run: |
+          cd backend
+          npm run test:ai:ollama
+
+      - name: Generate Health Report
+        run: |
+          cd backend
+          npm run test:ai:health-report
+
+      - name: Upload Health Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: ai-health-report
+          path: backend/ai-health-report.json
+
+  ai-performance-benchmark:
+    name: AI Performance Benchmarking
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      - name: Run AI Performance Benchmarks
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd backend
+          npm run benchmark:ai
+
+      - name: Upload Benchmark Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: ai-benchmark-results
+          path: backend/benchmark-results/
+
+  ai-model-availability:
+    name: AI Model Availability Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      - name: Check Model Availability
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd backend
+          npm run test:ai:models
+
+      - name: Update Model Registry
+        run: |
+          cd backend
+          npm run update:model-registry
+
+      - name: Commit Model Registry Updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add backend/src/config/models.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "Update AI model registry"
+          git push
