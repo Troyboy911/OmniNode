@@ -100,7 +100,7 @@ trap cleanup EXIT
 # Test health endpoints
 log "Testing health endpoints..."
 run_test "Backend health check" "curl -f $BACKEND_URL/api/health"
-run_test "Frontend health check" "curl -f $FRONTEND_URL/api/health"
+run_test "Frontend health check" "curl -f $FRONTEND_URL"
 
 # Test authentication
 log "Testing authentication endpoints..."
