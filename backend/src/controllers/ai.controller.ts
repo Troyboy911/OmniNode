@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import { aiOrchestrator } from '../services/ai/ai.orchestrator';
 import { logger } from '../config/logger';
-import { validateRequest } from '../middleware/validator';
-import { body, param, query } from 'express-validator';
 
 export const chatValidation = [
   body('message').isString().isLength({ min: 1, max: 10000 }),

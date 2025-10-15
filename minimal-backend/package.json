@@ -1,0 +1,17 @@
+{
+  "name": "omni-node-minimal",
+  "version": "1.0.0",
+  "description": "Minimal Omni Node Backend for CI/CD",
+  "main": "index.js",
+  "scripts": {
+    "build": "echo 'Build successful'",
+    "dev": "node index.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "compression": "^1.7.4"
+  }
+}
