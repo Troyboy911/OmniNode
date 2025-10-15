@@ -1,0 +1,36 @@
+{
+  "name": "omninode-worker",
+  "version": "1.0.0",
+  "description": "OmniNode API on Cloudflare Workers",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "deploy:staging": "wrangler deploy --env staging",
+    "deploy:production": "wrangler deploy --env production",
+    "build": "esbuild index.ts --bundle --outfile=dist/index.js --format=esm --platform=browser --target=es2022",
+    "test": "vitest",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "@prisma/client": "^5.8.0",
+    "@prisma/adapter-neon": "^5.8.0",
+    "@neondatabase/serverless": "^0.9.0",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^2.4.3",
+    "zod": "^3.22.4",
+    "openai": "^4.24.0",
+    "@anthropic-ai/sdk": "^0.17.0",
+    "@google/generative-ai": "^0.1.3"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240117.0",
+    "wrangler": "^3.22.0",
+    "typescript": "^5.3.3",
+    "esbuild": "^0.19.11",
+    "vitest": "^1.2.0",
+    "@types/jsonwebtoken": "^9.0.5",
+    "@types/bcryptjs": "^2.4.6"
+  }
+}

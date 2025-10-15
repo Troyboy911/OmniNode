@@ -1,0 +1,79 @@
+# Cloudflare Workers Configuration for OmniNode API
+
+name = "omninode-api"
+main = "src/worker/index.ts"
+compatibility_date = "2024-01-01"
+node_compat = true
+
+# Account Configuration
+account_id = "ea550872bb6cef055e98c8e42ae0c9aa"
+
+# Worker Settings
+workers_dev = true
+route = { pattern = "api.omninode.app/*", zone_name = "omninode.app" }
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "sessions_namespace_id"
+preview_id = "sessions_preview_id"
+
+[[kv_namespaces]]
+binding = "CACHE"
+id = "cache_namespace_id"
+preview_id = "cache_preview_id"
+
+# R2 Buckets
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "omninode-files"
+preview_bucket_name = "omninode-files-preview"
+
+# Durable Objects
+[[durable_objects.bindings]]
+name = "WEBSOCKET"
+class_name = "WebSocketDurableObject"
+script_name = "omninode-api"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["WebSocketDurableObject"]
+
+# Environment Variables (non-sensitive)
+[vars]
+ENVIRONMENT = "production"
+LOG_LEVEL = "info"
+CORS_ORIGIN = "https://omninode.app"
+
+# Secrets (set via wrangler secret put)
+# DATABASE_URL
+# JWT_SECRET
+# JWT_REFRESH_SECRET
+# OPENAI_API_KEY
+# ANTHROPIC_API_KEY
+# GOOGLE_API_KEY
+
+# Build Configuration
+[build]
+command = "npm run build"
+
+[build.upload]
+format = "service-worker"
+
+# Development
+[env.development]
+name = "omninode-api-dev"
+workers_dev = true
+vars = { ENVIRONMENT = "development", LOG_LEVEL = "debug" }
+
+# Staging
+[env.staging]
+name = "omninode-api-staging"
+route = { pattern = "api-staging.omninode.app/*", zone_name = "omninode.app" }
+vars = { ENVIRONMENT = "staging", LOG_LEVEL = "info" }
+
+# Production
+[env.production]
+name = "omninode-api"
+route = { pattern = "api.omninode.app/*", zone_name = "omninode.app" }
+vars = { ENVIRONMENT = "production", LOG_LEVEL = "warn" }
