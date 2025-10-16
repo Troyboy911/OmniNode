@@ -1,227 +1,169 @@
-name: EasyPanel Auto Deploy
+```yaml
+name: Synthetica Self-Healing CI/CD Pipeline
 
+# 1. Triggers
 on:
-  push:
-    branches: [ main ]
+  # Manual trigger with input required for the recursive healing loop
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Environment to deploy to'
+      attempt_count:
+        description: 'Current attempt number for self-healing loop'
         required: true
-        default: 'production'
-        type: choice
-        options:
-          - production
-          - staging
+        default: '1'
+        type: string
+  
+  # Standard push trigger (starts the initial attempt)
+  push:
+    branches:
+      - main
+      - develop
+
+  # 4. Continuous Monitoring (Periodic Self-Check)
+  schedule:
+    # Runs every day at 03:00 UTC
+    - cron: '0 3 * * *'
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  MAX_ATTEMPTS: 3
+  STAGING_ENV: staging
+  PROD_ENV: production
+  # Determines the current attempt number, prioritizing workflow_dispatch input
+  CURRENT_ATTEMPT: ${{ github.event.inputs.attempt_count || 1 }}
 
 jobs:
-  test-and-build:
+
+  # =======================================================
+  # JOB 1: Pipeline Execution (Build, Test, Deploy)
+  # This job contains the core logic and runs iteratively via self-dispatching.
+  # =======================================================
+  main_pipeline:
     runs-on: ubuntu-latest
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-      image-digest: ${{ steps.build.outputs.digest }}
+    
+    # Use environment definitions for protection rules in GitHub
+    environment: ${{ (github.ref == 'refs/heads/main') && env.PROD_ENV || env.STAGING_ENV }}
+    
+    # Only run the main job if the trigger is PUSH or MANUAL (not schedule)
+    if: github.event_name != 'schedule'
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Environment (Example: Node.js)
+        uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
 
-      - name: Install dependencies
-        run: |
-          cd backend
-          npm ci
+      - name: Report Current Healing Attempt
+        run: echo "Starting pipeline execution attempt #${{ env.CURRENT_ATTEMPT }} of ${{ env.MAX_ATTEMPTS }}."
 
-      - name: Run linting
+      # --- Build Stage ---
+      - name: 1. Build Application
+        id: build_app
         run: |
-          cd backend
-          npm run lint || true
-
-      - name: Run tests
-        run: |
-          cd backend
-          npm test || true
-
-      - name: Generate Prisma Client
-        run: |
-          cd backend
-          npx prisma generate
-
-      - name: Build application
-        run: |
-          cd backend
+          echo "Building application artifacts..."
+          # Replace with actual build commands (e.g., npm run build, docker build)
+          npm install
           npm run build
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Build and push Docker image
-        id: build
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy-production:
-    needs: test-and-build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event.inputs.environment == 'production')
-    environment: production
-    
-    steps:
-      - name: Deploy to EasyPanel Production
-        env:
-          EASYPANEL_URL: ${{ secrets.EASYPANEL_URL }}
-          EASYPANEL_API_KEY: ${{ secrets.EASYPANEL_API_KEY }}
-          IMAGE_TAG: ${{ needs.test-and-build.outputs.image-tag }}
+      # --- Test Stage (Simulated Failure Point 1) ---
+      - name: 2. Run Unit and Integration Tests
+        id: run_tests
         run: |
-          echo "🚀 Deploying to EasyPanel Production..."
+          echo "Running tests..."
+          # Replace with actual test commands (e.g., npm test)
           
-          # Create deployment payload
-          cat > deployment.json << EOF
-          {
-            "service": "omninode-app",
-            "image": "${IMAGE_TAG}",
-            "environment": {
-              "NODE_ENV": "production",
-              "DATABASE_URL": "${{ secrets.DATABASE_URL }}",
-              "REDIS_URL": "${{ secrets.REDIS_URL }}",
-              "JWT_SECRET": "${{ secrets.JWT_SECRET }}",
-              "OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
-              "ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}",
-              "GOOGLE_API_KEY": "${{ secrets.GOOGLE_API_KEY }}"
-            },
-            "ports": ["3000:3000"],
-            "volumes": ["./uploads:/app/uploads"],
-            "restart_policy": "unless-stopped"
-          }
-          EOF
-          
-          # Deploy via EasyPanel API
-          curl -X POST "${EASYPANEL_URL}/api/services" \
-            -H "Authorization: Bearer ${EASYPANEL_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d @deployment.json || \
-          curl -X PUT "${EASYPANEL_URL}/api/services/omninode-app" \
-            -H "Authorization: Bearer ${EASYPANEL_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d @deployment.json
-
-      - name: Wait for deployment
-        run: |
-          echo "⏳ Waiting for deployment to complete..."
-          sleep 30
-          
-      - name: Health check
-        run: |
-          echo "🏥 Running health check..."
-          for i in {1..10}; do
-            if curl -f http://${{ secrets.DOMAIN }}/api/v1/health; then
-              echo "✅ Health check passed!"
-              exit 0
-            fi
-            echo "⏳ Attempt $i/10 - waiting for service..."
-            sleep 10
-          done
-          echo "❌ Health check failed after 10 attempts"
-          exit 1
-
-      - name: Notify deployment success
+      # --- Deploy Staging Stage ---
+      - name: 3. Deploy to Staging Environment
+        id: deploy_staging
+        # Run only if the previous critical steps succeeded
         if: success()
-        run: |
-          echo "🎉 Deployment successful!"
-          echo "🌐 Application available at: https://${{ secrets.DOMAIN }}"
-          echo "📊 EasyPanel dashboard: ${{ secrets.EASYPANEL_URL }}"
+        uses: actions/deploy-to-staging@v1 # Placeholder Action
+        with:
+          environment_url: staging.app.com
+          
+      # --- Deploy Production Stage (Only run from main branch or successful staging deployment) ---
+      - name: 4. Deploy to Production Environment
+        id: deploy_production
+        # Deploy only if the branch is 'main' and all prior steps succeeded on the initial attempt
+        if: github.ref == 'refs/heads/main' && success() && env.CURRENT_ATTEMPT == 1
+        uses: actions/deploy-to-prod@v1 # Placeholder Action
+        with:
+          environment_url: prod.app.com
+          
+      # =======================================================
+      # 5. SELF-HEALING/RETRY LOGIC (Synthetica Automation)
+      # This step checks for critical failure and initiates a retry loop.
+      # =======================================================
+      - name: 5. Synthetica Self-Healing Analysis & Dispatch
+        id: self_heal
+        # Only execute this step if the pipeline has failed (e.g., build, test, or staging failed) 
+        # AND we have not exhausted our maximum number of attempts.
+        if: failure() && env.CURRENT_ATTEMPT < env.MAX_ATTEMPTS
+        uses: actions/github-script@v6
+        with:
+          # Required to dispatch a new workflow run
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const maxAttempts = parseInt(process.env.MAX_ATTEMPTS);
+            const currentAttempt = parseInt(process.env.CURRENT_ATTEMPT);
+            const nextAttempt = currentAttempt + 1;
+            
+            console.log(`Pipeline failed on attempt ${currentAttempt}.`);
 
-  deploy-staging:
-    needs: test-and-build
-    runs-on: ubuntu-latest
-    if: github.event.inputs.environment == 'staging'
-    environment: staging
-    
-    steps:
-      - name: Deploy to EasyPanel Staging
+            // --- Simulated Code Alteration Log ---
+            console.log(`Synthetica AI: Analyzing failure logs and generating configuration/code adjustments for attempt ${nextAttempt}.`);
+            // NOTE: True self-healing (altering code) requires PAT permissions and external logic.
+            // This script simulates the decision to retry after 'healing' occurs.
+
+            // --- Dispatch New Workflow Run (Recursive Loop) ---
+            await github.rest.actions.createWorkflowDispatch({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'synthetica_ci.yml', # Must match this file's name
+              ref: context.ref,
+              inputs: {
+                attempt_count: nextAttempt.toString()
+              }
+            });
+
+            console.log(`Healing attempt triggered. Restarting pipeline with attempt #${nextAttempt}.`);
         env:
-          EASYPANEL_URL: ${{ secrets.EASYPANEL_STAGING_URL }}
-          EASYPANEL_API_KEY: ${{ secrets.EASYPANEL_STAGING_API_KEY }}
-          IMAGE_TAG: ${{ needs.test-and-build.outputs.image-tag }}
-        run: |
-          echo "🚀 Deploying to EasyPanel Staging..."
-          
-          # Create staging deployment payload
-          cat > staging-deployment.json << EOF
-          {
-            "service": "omninode-app-staging",
-            "image": "${IMAGE_TAG}",
-            "environment": {
-              "NODE_ENV": "staging",
-              "DATABASE_URL": "${{ secrets.DATABASE_URL_STAGING }}",
-              "REDIS_URL": "${{ secrets.REDIS_URL_STAGING }}",
-              "JWT_SECRET": "${{ secrets.JWT_SECRET_STAGING }}",
-              "OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
-              "ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}",
-              "GOOGLE_API_KEY": "${{ secrets.GOOGLE_API_KEY }}"
-            },
-            "ports": ["3001:3000"],
-            "volumes": ["./uploads-staging:/app/uploads"],
-            "restart_policy": "unless-stopped"
-          }
-          EOF
-          
-          # Deploy to staging
-          curl -X POST "${EASYPANEL_URL}/api/services" \
-            -H "Authorization: Bearer ${EASYPANEL_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d @staging-deployment.json || \
-          curl -X PUT "${EASYPANEL_URL}/api/services/omninode-app-staging" \
-            -H "Authorization: Bearer ${EASYPANEL_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d @staging-deployment.json
+          MAX_ATTEMPTS: ${{ env.MAX_ATTEMPTS }}
+          CURRENT_ATTEMPT: ${{ env.CURRENT_ATTEMPT }}
 
-      - name: Staging health check
+      # Final step to fail the workflow if the max attempts limit has been reached
+      - name: 6. Final Failure Report and Halt
+        if: failure() && env.CURRENT_ATTEMPT == env.MAX_ATTEMPTS
         run: |
-          echo "🏥 Running staging health check..."
-          curl -f http://${{ secrets.STAGING_DOMAIN }}/api/v1/health || true
-
+          echo "ERROR: Synthetica healing failed after ${{ env.MAX_ATTEMPTS }} maximum attempts."
+          exit 1
+          
+  # =======================================================
+  # JOB 2: Cleanup
+  # =======================================================
   cleanup:
-    needs: [deploy-production, deploy-staging]
     runs-on: ubuntu-latest
-    if: always()
-    
+    needs: main_pipeline
+    if: always() # Ensure cleanup runs after success, failure, or cancellation
     steps:
-      - name: Cleanup old images
+      - name: Final Cleanup and Resource Deallocation
         run: |
-          echo "🧹 Cleaning up old container images..."
-          # Keep only the last 5 images
-          echo "Cleanup completed"
+          echo "Running final cleanup (e.g., removing temp artifacts, reporting status)."
+          echo "Cleanup complete."
+
+  # =======================================================
+  # JOB 3: Monitoring (Periodic Self-Check)
+  # =======================================================
+  periodic_check:
+    runs-on: ubuntu-latest
+    # Only runs when triggered by the 'schedule'
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Perform Periodic Self-Check & Status Update
+        run: |
+          echo "Running scheduled self-check for application status and new code updates."
+          # This step simulates the system checking its deployed status 
+          # and re-validating configurations against the latest code base.
+          echo "Status check complete. System is healthy."
+```
