@@ -1,17 +1,16 @@
 'use client';
-
 import { useState } from 'react';
-import { Sidebar } from '@/components/dashboard/Sidebar';
-import { EnhancedDashboard } from '@/components/dashboard/EnhancedDashboard';
-import { AscensionDashboard } from '@/components/dashboard/AscensionDashboard';
-import { PANNetworkDashboard } from '@/components/dashboard/PANNetworkDashboard';
-import { NeuralCockpitV2 } from '@/components/dashboard/NeuralCockpitV2';
-import { StrategicPlanner } from '@/components/dashboard/StrategicPlanner';
-import { AgentSynthesizer } from '@/components/dashboard/AgentSynthesizer';
-import { EconomicDashboard } from '@/components/dashboard/EconomicDashboard';
-import { BlockchainIntegration } from '@/components/dashboard/BlockchainIntegration';
-import { AIChatInterface } from '@/components/dashboard/AIChatInterface';
-import { FileUploadInterface } from '@/components/dashboard/FileUploadInterface';
+import { Sidebar } from '@/components/Sidebar';
+import { EnhancedDashboard } from '@/components/EnhancedDashboard';
+import { AscensionDashboard } from '@/components/AscensionDashboard';
+import { PANNetworkDashboard } from '@/components/PANNetworkDashboard';
+import { NeuralCockpitV2 } from '@/components/NeuralCockpitV2';
+import { StrategicPlanner } from '@/components/StrategicPlanner';
+import { AgentSynthesizer } from '@/components/AgentSynthesizer';
+import { EconomicDashboard } from '@/components/EconomicDashboard';
+import { BlockchainIntegration } from '@/components/BlockchainIntegration';
+import { AIChatInterface } from '@/components/AIChatInterface';
+import { FileUploadInterface } from '@/components/FileUploadInterface';
 
 type TabId = 'overview' | 'ascension' | 'pannetwork' | 'cockpitv2' | 'agents' | 'strategic' | 'synthesizer' | 'economic' | 'blockchain' | 'ai' | 'files';
 
@@ -36,7 +35,7 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900">
       {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -64,6 +63,7 @@ export default function Dashboard() {
               {activeTab === 'files' && 'Upload, manage, and process files with AI'}
             </p>
           </header>
+
           {/* Content */}
           <div>
             {activeTab === 'overview' && <EnhancedDashboard />}
