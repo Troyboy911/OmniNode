@@ -134,7 +134,7 @@ class ApiClient {
     localStorage.removeItem('token');
   }
 
-// Authentication
+  // Authentication
   async register(data: { email: string; password: string; name: string }) {
     const response = await this.axiosInstance.post('/auth/register', data);
     const { token, user } = response.data;
@@ -166,7 +166,7 @@ class ApiClient {
     this.clearToken();
   }
 
-// Projects
+  // Projects
   async getProjects() {
     const response = await this.axiosInstance.get('/projects');
     return response.data;
@@ -309,38 +309,35 @@ class ApiClient {
     await this.axiosInstance.delete(`/files/${id}`);
   }
 
-// File APIs
-};
-
-// Agent APIs
-export const agentAPI = {
-  getAgents: (params?: any) => apiClient.get('/agents', { params }),
-  getAgent: (id: string) => apiClient.get(`/agents/${id}`),
-  createAgent: (data: any) => apiClient.post('/agents', data),
-  updateAgent: (id: string, data: any) => apiClient.put(`/agents/${id}`, data),
-  deleteAgent: (id: string) => apiClient.delete(`/agents/${id}`),
-};
-
-// Task APIs
-export const taskAPI = {
-  getTasks: (params?: any) => apiClient.get('/tasks', { params }),
-  getTask: (id: string) => apiClient.get(`/tasks/${id}`),
-  createTask: (data: any) => apiClient.post('/tasks', data),
-
-
   // Health check
   async checkHealth() {
     const response = await this.axiosInstance.get('/health');
     return response.data;
-
   }
-  processFile: (data: any) => apiClient.generateAIResponse(data.prompt, data.model, data.context),
-  getProcessingJobs: () => Promise.resolve([]), // Not implemented yet
-  getModels: () => apiClient.getAIModels(),
+}
+
+// Create and export the apiClient instance
+const apiClient = new ApiClient();
+
+// Agent APIs
+export const agentAPI = {
+  getAgents: (params?: any) => apiClient.getAgents(params?.projectId),
+  getAgent: (id: string) => apiClient.getAgent(id),
+  createAgent: (data: any) => apiClient.createAgent(data),
+  updateAgent: (id: string, data: any) => apiClient.updateAgent(id, data),
+  deleteAgent: (id: string) => apiClient.deleteAgent(id),
 };
 
+// Task APIs
+export const taskAPI = {
+  getTasks: (params?: any) => apiClient.getTasks(params?.agentId),
+  getTask: (id: string) => apiClient.getTasks().then(tasks => tasks.find((t: Task) => t.id === id)),
+  createTask: (data: any) => apiClient.createTask(data),
+  updateTask: (id: string, data: any) => apiClient.updateTask(id, data),
+  deleteTask: (id: string) => apiClient.deleteTask(id),
 };
 
+// Project APIs
 export const projectAPI = {
   getProjects: (params?: any) => apiClient.getProjects(),
   getProject: (id: string) => apiClient.getProject(id),
@@ -349,17 +346,23 @@ export const projectAPI = {
   deleteProject: (id: string) => apiClient.deleteProject(id),
 };
 
-  getTask: (id: string) => apiClient.getTasks().then(tasks => tasks.find((t: Task) => t.id === id)),
-  createTask: (data: any) => apiClient.createTask(data),
-  updateTask: (id: string, data: any) => apiClient.updateTask(id, data),
-  deleteTask: (id: string) => apiClient.deleteTask(id),
-};
-
+// Command APIs
 export const commandAPI = {
   getCommands: (params?: any) => apiClient.getCommands(params?.projectId, params?.agentId),
   createCommand: (data: any) => apiClient.createCommand(data),
 };
 
+// File APIs
+export const fileAPI = {
+  uploadFile: (file: File, projectId?: string) => apiClient.uploadFile(file, projectId),
+  getFiles: (projectId?: string) => apiClient.getFiles(projectId),
+  deleteFile: (id: string) => apiClient.deleteFile(id),
+  processFile: (data: any) => apiClient.generateAIResponse(data.prompt, data.model, data.context),
+  getProcessingJobs: () => Promise.resolve([]), // Not implemented yet
+  getModels: () => apiClient.getAIModels(),
+};
+
+// Health APIs
 export const healthAPI = {
   check: () => apiClient.checkHealth(),
 };
