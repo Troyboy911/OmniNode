@@ -37,8 +37,12 @@ model Project {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  agents      Agent[]
-  tasks       Task[]
+  agents       Agent[]
+  tasks        Task[]
+  workflows    Workflow[]
+  deployments  Deployment[]
+  costEvents   CostEvent[]
+  scraperJobs  ScraperJob[]
 
   @@index([userId])
   @@index([status])
@@ -79,8 +83,205 @@ model Task {
   agentId     String?
   agent       Agent?   @relation(fields: [agentId], references: [id], onDelete: SetNull)
 
+  workflowId  String?
+  workflow    Workflow? @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+
+  executionLogs ExecutionLog[]
+
   @@index([projectId])
   @@index([agentId])
   @@index([status])
   @@index([priority])
+  @@index([workflowId])
+}
+
+model Workflow {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  steps       Json     // Array of workflow steps with dependencies
+  config      Json     @default("{}")
+  status      String   @default("ACTIVE")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  tasks       Task[]
+  runs        Run[]
+  automations Automation[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model Automation {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  trigger     Json     // Cron, webhook, event-based triggers
+  enabled     Boolean  @default(true)
+  lastRun     DateTime?
+  nextRun     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  workflowId  String
+  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  runs        Run[]
+
+  @@index([workflowId])
+  @@index([enabled])
+  @@index([nextRun])
+}
+
+model Run {
+  id            String   @id @default(uuid())
+  status        String   @default("RUNNING") // RUNNING, COMPLETED, FAILED, CANCELLED
+  startedAt     DateTime @default(now())
+  completedAt   DateTime?
+  duration      Int?     // Duration in milliseconds
+  result        Json?
+  error         String?
+  createdAt     DateTime @default(now())
+
+  workflowId    String
+  workflow      Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  automationId  String?
+  automation    Automation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+
+  executionLogs ExecutionLog[]
+  costEvents    CostEvent[]
+
+  @@index([workflowId])
+  @@index([automationId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+model ExecutionLog {
+  id        String   @id @default(uuid())
+  level     String   // INFO, WARN, ERROR, DEBUG
+  message   String
+  data      Json?
+  timestamp DateTime @default(now())
+
+  runId     String?
+  run       Run?     @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  taskId    String?
+  task      Task?    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@index([taskId])
+  @@index([level])
+  @@index([timestamp])
+}
+
+model Deployment {
+  id           String   @id @default(uuid())
+  environment  String   // development, staging, production
+  version      String
+  status       String   @default("PENDING") // PENDING, DEPLOYING, DEPLOYED, FAILED, ROLLED_BACK
+  commitSha    String?
+  deployedBy   String?
+  deployedAt   DateTime?
+  rolledBackAt DateTime?
+  metadata     Json?    // Additional deployment metadata
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([environment])
+  @@index([status])
+  @@index([deployedAt])
+}
+
+model CostEvent {
+  id          String   @id @default(uuid())
+  service     String   // openai, anthropic, cloudflare, compute
+  operation   String   // completion, embedding, storage, bandwidth
+  amount      Float    // Cost in USD
+  units       Float?   // Tokens, GB, requests, etc.
+  metadata    Json?    // Provider-specific data
+  timestamp   DateTime @default(now())
+
+  runId       String?
+  run         Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([runId])
+  @@index([service])
+  @@index([timestamp])
+}
+
+model ScraperJob {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  targetUrl   String
+  preset      String?  // Template name for common scenarios
+  config      Json     // Selectors, pagination, auth, rate limits
+  schedule    String?  // Cron expression
+  status      String   @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED, PAUSED
+  priority    Int      @default(5)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  results     ScraperResult[]
+  schedules   ScraperSchedule[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([priority])
+  @@index([nextRunAt])
+}
+
+model ScraperResult {
+  id          String   @id @default(uuid())
+  data        Json     // Scraped data
+  metadata    Json?    // Response headers, timing, errors
+  itemsCount  Int      @default(0)
+  success     Boolean  @default(true)
+  error       String?
+  duration    Int?     // Duration in milliseconds
+  createdAt   DateTime @default(now())
+
+  jobId       String
+  job         ScraperJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([success])
+  @@index([createdAt])
+}
+
+model ScraperSchedule {
+  id          String   @id @default(uuid())
+  cronExpr    String   // Cron expression
+  enabled     Boolean  @default(true)
+  lastRun     DateTime?
+  nextRun     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobId       String
+  job         ScraperJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([enabled])
+  @@index([nextRun])
 }

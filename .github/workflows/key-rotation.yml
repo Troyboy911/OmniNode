@@ -1,0 +1,69 @@
+name: Monthly Key Rotation
+
+on:
+  schedule:
+    - cron: '0 2 1 * *'  # 2 AM on the 1st of every month
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  rotate-secrets:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install dependencies
+        working-directory: ./backend
+        run: npm ci
+      
+      - name: Rotate JWT secrets
+        working-directory: ./backend
+        env:
+          ENCRYPTION_MASTER_KEY: ${{ secrets.ENCRYPTION_MASTER_KEY }}
+        run: |
+          # Generate new JWT secrets
+          npm run vault:rotate JWT_SECRET
+          npm run vault:rotate JWT_REFRESH_SECRET
+      
+      - name: Sync to Cloudflare
+        working-directory: ./backend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ENCRYPTION_MASTER_KEY: ${{ secrets.ENCRYPTION_MASTER_KEY }}
+        run: |
+          npm run vault:sync --targets cloudflare
+      
+      - name: Sync to GitHub Secrets
+        working-directory: ./backend
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          ENCRYPTION_MASTER_KEY: ${{ secrets.ENCRYPTION_MASTER_KEY }}
+        run: |
+          npm run vault:sync --targets github
+      
+      - name: Create rotation log
+        run: |
+          echo "# Key Rotation Log - $(date)" >> rotation-log.md
+          echo "Rotated: JWT_SECRET, JWT_REFRESH_SECRET" >> rotation-log.md
+          echo "Status: Success" >> rotation-log.md
+      
+      - name: Commit rotation log
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: monthly key rotation $(date +%Y-%m-%d)"
+          file_pattern: rotation-log.md
+      
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "::notice::Key rotation completed successfully on $(date)"
+      
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Key rotation failed on $(date)"
