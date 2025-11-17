@@ -2,9 +2,9 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, feat-weaponized-omninode]
   pull_request:
-    branches: [main, master]
+    branches: [main, master, feat-weaponized-omninode]
   workflow_dispatch:
 
 env:
@@ -102,7 +102,7 @@ jobs:
   deploy-backend:
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/feat-weaponized-omninode'
     
     steps:
       - uses: actions/checkout@v4
@@ -139,7 +139,7 @@ jobs:
   deploy-frontend:
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/feat-weaponized-omninode'
     
     steps:
       - uses: actions/checkout@v4
