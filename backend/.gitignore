@@ -7,6 +7,13 @@ yarn.lock
 .env
 .env.local
 .env.production
+.env.staging
+.env.dev
+
+# Secrets Vault - NEVER COMMIT
+.vault/
+*.vault.json
+master.key
 
 # Build output
 dist/
