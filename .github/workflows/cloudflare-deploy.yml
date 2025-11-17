@@ -70,7 +70,11 @@ jobs:
           
           echo "✅ Pre-flight analysis complete"
 
-      - name: Synthetica Risk Assessment"
+      - name: Synthetica Risk Assessment
+        run: |
+          echo "🔍 Synthetica risk assessment..."
+          if [ "$MISSING_CF_TOKEN" = "true" ] || [ "$MISSING_DB_URL" = "true" ]; then
+            echo "❌ CRITICAL: Missing required secrets"
             echo "RISK_LEVEL=HIGH" >> $GITHUB_ENV
           elif [ "$MISSING_WRANGLER" = "true" ] || [ "$DEPRECATED_NODE_COMPAT" = "true" ]; then
             echo "⚠️  MEDIUM RISK: Configuration issues detected"
@@ -235,8 +239,8 @@ jobs:
         id: deploy_worker
         working-directory: src
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}"
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
           echo "🚀 Deploying Worker to Cloudflare..."
           
@@ -257,8 +261,8 @@ jobs:
         if: success() && steps.deploy_worker.outcome == 'success'
         working-directory: src
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}"
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
         run: |
           echo "🔐 Setting Worker secrets..."
           
