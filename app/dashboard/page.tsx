@@ -1,10 +1,9 @@
 'use client';
 import { useState } from 'react';
-import { Sidebar } from '@/components/Sidebar';
+// import { Sidebar } from '@/components/Sidebar';
 import { EnhancedDashboard } from '@/components/EnhancedDashboard';
 import { AscensionDashboard } from '@/components/AscensionDashboard';
-import { PANNetworkDashboard } from '@/components/PANNetworkDashboard';
-import { NeuralCockpitV2 } from '@/components/NeuralCockpitV2';
+import { PanNetworkDashboard } from '@/components/PanNetworkDashboard';import { NeuralCockpitV2 } from '@/components/NeuralCockpitV2';
 import { StrategicPlanner } from '@/components/StrategicPlanner';
 import { AgentSynthesizer } from '@/components/AgentSynthesizer';
 import { EconomicDashboard } from '@/components/EconomicDashboard';
@@ -35,11 +34,11 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-blue-900">
       {/* Sidebar */}
-      <Sidebar
+{/*       <Sidebar
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={setActiveTab}
-      />
+      /> */}
       
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
@@ -68,8 +67,7 @@ export default function Dashboard() {
           <div>
             {activeTab === 'overview' && <EnhancedDashboard />}
             {activeTab === 'ascension' && <AscensionDashboard />}
-            {activeTab === 'pannetwork' && <PANNetworkDashboard />}
-            {activeTab === 'cockpitv2' && <NeuralCockpitV2 />}
+        {activeTab === 'pannetwork' && <PanNetworkDashboard />}            {activeTab === 'cockpitv2' && <NeuralCockpitV2 />}
             {activeTab === 'agents' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Agent content will be loaded via EnhancedDashboard */}
