@@ -3,7 +3,7 @@
 name = "omninode-api"
 main = "src/worker.ts"
 compatibility_date = "2025-01-17"
-node_compat = true
+compatibility_flags = ["nodejs_compat"]
 
 # Account Configuration
 account_id = "ea550872bb6cef055e98c8e42ae0c9aa"
