@@ -18,6 +18,65 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [selectedProject, setSelectedProject] = useState<string>('default-project');
 
+  // Mock agents data for NeuralCockpitV2
+  const mockAgents = [
+    {
+      id: '1',
+      name: 'Agent Alpha',
+      role: 'Project Manager',
+      status: 'working',
+      performance: {
+        successRate: 0.95,
+        tasksCompleted: 150,
+        resourceUsage: 0.7
+      }
+    },
+    {
+      id: '2',
+      name: 'Agent Beta',
+      role: 'Frontend Developer',
+      status: 'active',
+      performance: {
+        successRate: 0.88,
+        tasksCompleted: 120,
+        resourceUsage: 0.65
+      }
+    },
+    {
+      id: '3',
+      name: 'Agent Gamma',
+      role: 'Smart Contract Auditor',
+      status: 'working',
+      performance: {
+        successRate: 0.92,
+        tasksCompleted: 85,
+        resourceUsage: 0.8
+      }
+    },
+    {
+      id: '4',
+      name: 'Agent Delta',
+      role: 'Data Analyst',
+      status: 'idle',
+      performance: {
+        successRate: 0.78,
+        tasksCompleted: 60,
+        resourceUsage: 0.45
+      }
+    },
+    {
+      id: '5',
+      name: 'Agent Epsilon',
+      role: 'DevOps Engineer',
+      status: 'working',
+      performance: {
+        successRate: 0.90,
+        tasksCompleted: 95,
+        resourceUsage: 0.72
+      }
+    }
+  ];
+
   const tabs = [
     { id: 'overview' as const, name: 'Overview', icon: '📊' },
     { id: 'ascension' as const, name: 'Ascension Protocol', icon: '🧬' },
@@ -69,7 +128,7 @@ export default function Dashboard() {
             {activeTab === 'overview' && <EnhancedDashboard />}
             {activeTab === 'ascension' && <AscensionDashboard />}
             {activeTab === 'pannetwork' && <PanNetworkDashboard />}
-            {activeTab === 'cockpitv2' && <NeuralCockpitV2 />}
+            {activeTab === 'cockpitv2' && <NeuralCockpitV2 agents={mockAgents} />}
             {activeTab === 'agents' && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Agent content will be loaded via EnhancedDashboard */}
