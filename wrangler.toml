@@ -1,0 +1,26 @@
+name = "omninode"
+main = "src/index.js"
+compatibility_date = "2024-11-19"
+
+# Account details
+account_id = "" # Will be set via environment variable
+
+# Container configuration for Cloudflare Workers
+[env.production]
+name = "omninode-production"
+route = { pattern = "omninode.cc/*", zone_name = "omninode.cc" }
+
+# Environment variables
+[env.production.vars]
+NODE_ENV = "production"
+
+# Secrets (set via wrangler secret put command)
+# DATABASE_URL
+# JWT_SECRET
+# JWT_REFRESH_SECRET
+# OPENAI_API_KEY
+# PERPLEXITY_API_KEY
+
+# For container-based deployment
+# The Docker image will be referenced via GitHub Container Registry
+# Image: ghcr.io/troyboy911/omninode:feat-weaponized-omninode
